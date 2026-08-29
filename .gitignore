@@ -1,0 +1,26 @@
+# Dependency directories
+**/node_modules/
+**/package-lock.json
+
+# Expo directories and files
+**/.expo/
+**/dist/
+**/web-build/
+
+# Local env files (holds sensitive database credentials)
+**/.env
+**/.env.local
+
+# IDEs and editors
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+.DS_Store
+
+# Temporary files
+*.log
+*.tmp
