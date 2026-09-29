@@ -2,119 +2,96 @@
 // ============================================================
 // Attendance Model Functions
 // File: parent-teacher-backend/models/attendance_model.php
-// Description: Reusable database functions for the `attendance` table.
+//
+// 🎯 WHY THIS FILE EXISTS:
+// Manages all roll-call attendance logging, daily attendance records,
+// and automated percentage aggregate calculations.
+//
+// 💡 WHAT IT DOES:
+// Calculates student attendance percentage, present vs absent days,
+// records batch class roll-calls, and retrieves attendance history logs.
+//
+// ⚙️ HOW IT WORKS:
+// Uses SQL Aggregate functions (COUNT, SUM, CASE WHEN, ROUND) executed
+// via PDO Prepared Statements for high-performance statistical summaries.
 // ============================================================
 
 /**
- * Fetches attendance history logs for a specific student.
+ * Calculates summary attendance statistics for a specific student.
  *
- * @param PDO $pdo Active database connection instance
- * @param int $studentId Student primary key ID
- * @param int $limit Max number of records to return
- * @return array List of attendance log records
- */
-function getAttendanceByStudent($pdo, $studentId, $limit = 30) {
-    $stmt = $pdo->prepare("
-        SELECT 
-            a.id,
-            a.attendance_date as date,
-            a.status,
-            a.remarks,
-            COALESCE(u.full_name, 'Sarah Connor') as recorded_by
-        FROM attendance a
-        LEFT JOIN teachers t ON a.recorded_by = t.id
-        LEFT JOIN users u ON t.user_id = u.id
-        WHERE a.student_id = ?
-        ORDER BY a.attendance_date DESC
-        LIMIT ?
-    ");
-    // PDO require INT parameter type binding for LIMIT
-    $stmt->bindValue(1, (int)$studentId, PDO::PARAM_INT);
-    $stmt->bindValue(2, (int)$limit, PDO::PARAM_INT);
-    $stmt->execute();
-    $logs = $stmt->fetchAll();
-
-    if (empty($logs)) {
-        return [];
-    }
-
-    return $logs;
-}
-
-/**
- * Computes summary attendance statistics (total days, present, absent, late, percentage).
- *
- * @param PDO $pdo Active database connection instance
- * @param int $studentId Student primary key ID
- * @return array Attendance statistics summary object
+ * WHY: Parent Dashboard & Progress report cards display live attendance %.
+ * WHAT: Calculates total days, present days, absent days, and percentage.
+ * HOW: Uses SQL SUM(CASE WHEN status='present' THEN 1 ELSE 0 END) aggregate.
  */
 function getAttendanceSummaryStats($pdo, $studentId) {
+    // 1. HOW: Prepare SQL aggregate query
     $stmt = $pdo->prepare("
         SELECT 
             COUNT(*) as total_days,
             SUM(CASE WHEN status = 'present' THEN 1 ELSE 0 END) as present_days,
             SUM(CASE WHEN status = 'absent' THEN 1 ELSE 0 END) as absent_days,
-            SUM(CASE WHEN status = 'late' THEN 1 ELSE 0 END) as late_days,
-            SUM(CASE WHEN status = 'excused' THEN 1 ELSE 0 END) as excused_days
+            ROUND((SUM(CASE WHEN status = 'present' THEN 1 ELSE 0 END) / COUNT(*)) * 100, 1) as percentage
         FROM attendance
         WHERE student_id = ?
     ");
+    // 2. HOW: Bind student ID safely and execute query
     $stmt->execute([(int)$studentId]);
-    $sum = $stmt->fetch();
+    $res = $stmt->fetch();
 
-    $totalDays = (int)($sum['total_days'] ?? 0);
-    $presentDays = (int)($sum['present_days'] ?? 0);
-    $absentDays = (int)($sum['absent_days'] ?? 0);
-    $lateDays = (int)($sum['late_days'] ?? 0);
-    $excusedDays = (int)($sum['excused_days'] ?? 0);
-
-    if ($totalDays === 0) {
-        return [
-            'total_days'   => 0,
-            'present_days' => 0,
-            'absent_days'  => 0,
-            'late_days'    => 0,
-            'excused_days' => 0,
-            'percentage'   => 0.0
-        ];
-    }
-
-    $percentage = round(($presentDays / $totalDays) * 100, 1);
-
+    // 3. WHAT: Return structured associative array with type formatting
     return [
-        'total_days' => $totalDays,
-        'present_days' => $presentDays,
-        'absent_days' => $absentDays,
-        'late_days' => $lateDays,
-        'excused_days' => $excusedDays,
-        'percentage' => $percentage
+        'total_days'   => (int)($res['total_days'] ?? 0),
+        'present_days' => (int)($res['present_days'] ?? 0),
+        'absent_days'  => (int)($res['absent_days'] ?? 0),
+        'percentage'   => (float)($res['percentage'] ?? 100.0)
     ];
 }
 
 /**
- * Records or updates a daily roll-call attendance record.
+ * Records or updates attendance for a single student on a specific date.
  *
- * @param PDO $pdo Active database connection instance
- * @param int $studentId Student ID
- * @param int $classId Class ID
- * @param string $attendanceDate Date (YYYY-MM-DD)
- * @param string $status Attendance status ('present', 'absent', 'late', 'excused')
- * @param string|null $remarks Optional teacher note
- * @param int|null $recordedBy Teacher ID who took roll call
- * @return bool True on success
+ * WHY: Teacher roll call screen logging.
+ * WHAT: Inserts or updates attendance record for (student_id, date).
+ * HOW: Uses ON DUPLICATE KEY UPDATE to overwrite existing record if re-submitted.
  */
-function recordDailyAttendance($pdo, $studentId, $classId, $attendanceDate, $status, $remarks = null, $recordedBy = null) {
+function recordAttendance($pdo, $studentId, $classId, $date, $status, $recordedByUserId = null) {
     $stmt = $pdo->prepare("
-        INSERT INTO attendance (student_id, class_id, attendance_date, status, remarks, recorded_by) 
-        VALUES (?, ?, ?, ?, ?, ?)
-        ON DUPLICATE KEY UPDATE status = VALUES(status), remarks = VALUES(remarks), recorded_by = VALUES(recorded_by)
+        INSERT INTO attendance (student_id, class_id, date, status, recorded_by)
+        VALUES (?, ?, ?, ?, ?)
+        ON DUPLICATE KEY UPDATE status = VALUES(status), recorded_by = VALUES(recorded_by)
     ");
     return $stmt->execute([
         (int)$studentId,
-        (int)$classId,
-        $attendanceDate,
-        strtolower($status),
-        $remarks,
-        $recordedBy ? (int)$recordedBy : null
+        $classId ? (int)$classId : null,
+        $date,
+        $status,
+        $recordedByUserId ? (int)$recordedByUserId : null
     ]);
+}
+
+/**
+ * Fetches attendance log history for a student between optional date range.
+ *
+ * WHY: Parent Attendance History tab view.
+ * WHAT: Retrieves date, status ('present', 'absent', 'late'), and remark.
+ * HOW: Returns chronological array sorted by date DESC.
+ */
+function getStudentAttendanceHistory($pdo, $studentId, $startDate = null, $endDate = null) {
+    $sql = "SELECT id, date, status, remark FROM attendance WHERE student_id = ?";
+    $params = [(int)$studentId];
+
+    if ($startDate) {
+        $sql .= " AND date >= ?";
+        $params[] = $startDate;
+    }
+    if ($endDate) {
+        $sql .= " AND date <= ?";
+        $params[] = $endDate;
+    }
+
+    $sql .= " ORDER BY date DESC";
+
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute($params);
+    return $stmt->fetchAll();
 }

@@ -2,45 +2,57 @@
 // ============================================================
 // Student Model Functions
 // File: parent-teacher-backend/models/student_model.php
-// Description: Reusable database helper functions for the `students` table.
+//
+// 🎯 WHY THIS FILE EXISTS:
+// Centralizes all database functions for managing student records, linked children,
+// class assignments, and guardian relationships.
+//
+// 💡 WHAT IT DOES:
+// Queries linked children for parents, lists class rosters for teachers,
+// creates new student admission records, and fetches comprehensive profile data.
+//
+// ⚙️ HOW IT WORKS:
+// Uses SQL JOINs across `students`, `classes`, and `parent_students` tables
+// executed via PDO Prepared Statements for fast, secure relational data retrieval.
 // ============================================================
 
 /**
- * Finds a student record by unique student ID.
+ * Fetches all student records linked to a specific parent guardian.
  *
- * @param PDO $pdo Active database connection instance
- * @param int $studentId Student primary key ID
- * @return array|false Student profile associative array or false
+ * WHY: Parent Dashboard needs to display linked children cards and stats.
+ * WHAT: Relational SQL JOIN linking students, parent_students, and classes.
+ * HOW: Filters by ps.parent_id = ? and returns array of linked child records.
  */
-function findStudentById($pdo, $studentId) {
-    $hasAdmCol = false;
-    try {
-        $colCheck = $pdo->query("SHOW COLUMNS FROM `students` LIKE 'admission_number'")->fetch();
-        if ($colCheck) $hasAdmCol = true;
-    } catch (Exception $e) {}
-
-    $admSelect = $hasAdmCol ? "s.admission_number" : (
-        $pdo->query("SHOW COLUMNS FROM `students` LIKE 'student_number'")->fetch() ? "s.student_number as admission_number" : "CONCAT('STU-2026-0', s.id) as admission_number"
-    );
-
-    $nameColCheck = $pdo->query("SHOW COLUMNS FROM `students` LIKE 'full_name'")->fetch();
-    $nameSelect = $nameColCheck ? "s.full_name" : "TRIM(CONCAT(IFNULL(s.first_name, ''), ' ', IFNULL(s.last_name, ''))) as full_name";
-
-    $gradeColCheck = $pdo->query("SHOW COLUMNS FROM `classes` LIKE 'grade_level'")->fetch();
-    $gradeSelect = $gradeColCheck ? "c.grade_level" : "c.class_level as grade_level";
-
+function getLinkedStudentsForParent($pdo, $parentId) {
+    // 1. HOW: Prepare multi-table SQL JOIN query
     $stmt = $pdo->prepare("
         SELECT 
-            s.id,
-            {$admSelect},
-            {$nameSelect},
-            s.date_of_birth,
-            s.gender,
-            s.status,
-            s.class_id,
-            s.combination,
-            c.class_name,
-            {$gradeSelect}
+            s.id, s.admission_number, s.full_name, s.class_id, s.status,
+            c.class_name, c.grade_level, ps.relationship_type
+        FROM students s
+        JOIN parent_students ps ON s.id = ps.student_id
+        LEFT JOIN classes c ON s.class_id = c.id
+        WHERE ps.parent_id = ? AND (s.status = 'active' OR s.status IS NULL)
+        ORDER BY s.full_name ASC
+    ");
+    // 2. HOW: Bind parent ID safely and execute
+    $stmt->execute([(int)$parentId]);
+    // 3. WHAT: Return array of linked student records
+    return $stmt->fetchAll();
+}
+
+/**
+ * Fetches single student record with class name.
+ *
+ * WHY: Profile view & roll call verification.
+ * WHAT: Retrieves student details by primary key student ID.
+ * HOW: Returns single student row as associative array.
+ */
+function getStudentById($pdo, $studentId) {
+    $stmt = $pdo->prepare("
+        SELECT 
+            s.*, 
+            c.class_name
         FROM students s
         LEFT JOIN classes c ON s.class_id = c.id
         WHERE s.id = ?
@@ -50,10 +62,11 @@ function findStudentById($pdo, $studentId) {
 }
 
 /**
- * Fetches all student records in the school database.
+ * Fetches all active student records in the school database.
  *
- * @param PDO $pdo Active database connection instance
- * @return array List of all student records
+ * WHY: Admin student management directory.
+ * WHAT: Returns all student records sorted alphabetically.
+ * HOW: Executes query and returns array via fetchAll().
  */
 function getAllStudents($pdo) {
     $stmt = $pdo->query("
@@ -66,65 +79,38 @@ function getAllStudents($pdo) {
 }
 
 /**
- * Fetches all active students enrolled in a specific class.
+ * Creates a new student record.
  *
- * @param PDO $pdo Active database connection instance
- * @param int $classId Class primary key ID
- * @return array List of student records enrolled in class
+ * WHY: Enrolls a new student into the school portal system.
+ * WHAT: Inserts full_name, admission_number, class_id, and guardian details.
+ * HOW: Returns newly created student primary key integer ID.
  */
-function getStudentsByClassId($pdo, $classId) {
+function createStudent($pdo, $fullName, $admissionNumber, $classId = null, $gender = null, $dob = null) {
     $stmt = $pdo->prepare("
-        SELECT s.*, c.class_name 
-        FROM students s
-        LEFT JOIN classes c ON s.class_id = c.id
-        WHERE s.class_id = ? AND s.status = 'active'
-        ORDER BY s.full_name ASC
-    ");
-    $stmt->execute([(int)$classId]);
-    return $stmt->fetchAll();
-}
-
-/**
- * Creates a new student record in the database.
- *
- * @param PDO $pdo Active database connection instance
- * @param string $admissionNumber Unique student registration number
- * @param string $fullName Student's full name
- * @param string $dateOfBirth Date of birth (YYYY-MM-DD)
- * @param string $gender Student gender ('male', 'female', 'other')
- * @param int|null $classId Assigned class ID
- * @return int Newly created student ID
- */
-function createStudentRecord($pdo, $admissionNumber, $fullName, $dateOfBirth, $gender, $classId = null) {
-    $stmt = $pdo->prepare("
-        INSERT INTO students (admission_number, full_name, date_of_birth, gender, class_id, status) 
+        INSERT INTO students (full_name, admission_number, class_id, gender, date_of_birth, status)
         VALUES (?, ?, ?, ?, ?, 'active')
     ");
     $stmt->execute([
-        trim($admissionNumber),
         trim($fullName),
-        $dateOfBirth,
-        strtolower($gender),
-        $classId ? (int)$classId : null
+        trim($admissionNumber),
+        $classId ? (int)$classId : null,
+        $gender,
+        $dob
     ]);
     return (int)$pdo->lastInsertId();
 }
 
 /**
- * Updates a student's class assignment or personal details.
+ * Links a student to a parent guardian record.
  *
- * @param PDO $pdo Active database connection instance
- * @param int $studentId Target student ID
- * @param string $fullName Updated full name
- * @param int|null $classId Updated class ID
- * @param string $status Updated status ('active', 'graduated', 'transferred')
- * @return bool True on success
+ * WHY: Junction table `parent_students` mapping parent to child.
+ * WHAT: Inserts (parent_id, student_id, relationship_type) tuple.
+ * HOW: Uses INSERT IGNORE to prevent duplicate relationship records.
  */
-function updateStudentRecord($pdo, $studentId, $fullName, $classId = null, $status = 'active') {
+function linkStudentToParent($pdo, $parentId, $studentId, $relationshipType = 'parent') {
     $stmt = $pdo->prepare("
-        UPDATE students 
-        SET full_name = ?, class_id = ?, status = ? 
-        WHERE id = ?
+        INSERT IGNORE INTO parent_students (parent_id, student_id, relationship_type)
+        VALUES (?, ?, ?)
     ");
-    return $stmt->execute([trim($fullName), $classId ? (int)$classId : null, $status, (int)$studentId]);
+    return $stmt->execute([(int)$parentId, (int)$studentId, $relationshipType]);
 }
