@@ -1,9 +1,13 @@
+import { Platform } from 'react-native';
 import { Tabs } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
 import { useTheme } from '@/hooks/use-theme';
+import { TeacherClassProvider } from '@/context/TeacherClassContext';
+import { useSync } from '@/context/SyncContext';
 
-export default function TeacherLayout() {
+function TeacherTabs() {
   const theme = useTheme();
+  const { unreadCounts } = useSync();
 
   return (
     <Tabs
@@ -17,14 +21,29 @@ export default function TeacherLayout() {
           backgroundColor: theme.background,
           borderTopColor: theme.backgroundElement,
         },
-        tabBarActiveTintColor: '#34C759',
+        tabBarActiveTintColor: '#14B8A6',
         tabBarInactiveTintColor: theme.textSecondary,
+        tabBarBadgeStyle: {
+          backgroundColor: '#FF3B30',
+          color: '#FFFFFF',
+          fontSize: 10,
+          fontWeight: 'bold',
+          borderRadius: 10,
+          minWidth: 20,
+          height: 20,
+          lineHeight: Platform.OS === 'ios' ? 20 : 18,
+          textAlign: 'center',
+          paddingHorizontal: 4,
+          borderWidth: 0,
+          borderColor: 'transparent',
+          overflow: 'hidden',
+        },
       }}
     >
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Teacher Home',
+          title: 'Teacher Home (S.1–S.6)',
           tabBarLabel: 'Home',
           tabBarIcon: ({ color, size }) => (
             <SymbolView
@@ -38,7 +57,7 @@ export default function TeacherLayout() {
       <Tabs.Screen
         name="attendance"
         options={{
-          title: 'Mark Attendance',
+          title: 'Roll-Call Attendance',
           tabBarLabel: 'Attendance',
           tabBarIcon: ({ color, size }) => (
             <SymbolView
@@ -52,8 +71,8 @@ export default function TeacherLayout() {
       <Tabs.Screen
         name="progress"
         options={{
-          title: 'Log Progress Marks',
-          tabBarLabel: 'Log Grades',
+          title: 'Assessment Marks',
+          tabBarLabel: 'Marks & Progress',
           tabBarIcon: ({ color, size }) => (
             <SymbolView
               tintColor={color}
@@ -68,6 +87,7 @@ export default function TeacherLayout() {
         options={{
           title: 'Parent Chat Inbox',
           tabBarLabel: 'Messages',
+          tabBarBadge: unreadCounts?.unread_messages > 0 ? unreadCounts.unread_messages : undefined,
           tabBarIcon: ({ color, size }) => (
             <SymbolView
               tintColor={color}
@@ -80,8 +100,9 @@ export default function TeacherLayout() {
       <Tabs.Screen
         name="notifications"
         options={{
-          title: 'Announcements Board',
-          tabBarLabel: 'Post Notice',
+          title: 'School Noticeboard',
+          tabBarLabel: 'Notices',
+          tabBarBadge: unreadCounts?.unread_notifications > 0 ? unreadCounts.unread_notifications : undefined,
           tabBarIcon: ({ color, size }) => (
             <SymbolView
               tintColor={color}
@@ -92,5 +113,13 @@ export default function TeacherLayout() {
         }}
       />
     </Tabs>
+  );
+}
+
+export default function TeacherLayout() {
+  return (
+    <TeacherClassProvider>
+      <TeacherTabs />
+    </TeacherClassProvider>
   );
 }

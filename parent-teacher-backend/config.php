@@ -1,4 +1,7 @@
 <?php
+ini_set('display_errors', '0');
+error_reporting(0);
+
 // CORS Headers: Allows the React Native app to send HTTP requests to this PHP backend
 header("Access-Control-Allow-Origin: *");
 header("Access-Control-Allow-Credentials: true");
@@ -34,9 +37,14 @@ try {
      // Create a new PDO database connection pool instance
      $pdo = new PDO($dsn, $user, $pass, $options);
 } catch (\PDOException $e) {
-     // If the database is offline, return a 500 error code and stop execution
-     http_response_code(500);
-     header('Content-Type: application/json');
-     echo json_encode(["error" => "Database connection failed: " . $e->getMessage()]);
-     exit();
+     // Fallback: Try connecting with empty password '' (default for XAMPP / WAMP on Windows)
+     try {
+         $pdo = new PDO($dsn, $user, '', $options);
+     } catch (\PDOException $e2) {
+         // If database connection fails, return 500 error code and stop execution
+         http_response_code(500);
+         header('Content-Type: application/json');
+         echo json_encode(["error" => "Database connection failed: " . $e2->getMessage()]);
+         exit();
+     }
 }

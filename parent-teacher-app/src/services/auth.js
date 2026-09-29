@@ -46,3 +46,16 @@ export async function changePassword(currentPassword, newPassword) {
     },
   });
 }
+
+/**
+ * Updates current user profile details (contact info, address, specialization, etc.).
+ *
+ * @param {object} payload
+ * @returns {Promise<object>} Updated user profile object
+ */
+export async function updateUserProfile(payload) {
+  return await apiRequest('/api/auth/update_profile.php', {
+    method: 'POST',
+    body: payload,
+  });
+}

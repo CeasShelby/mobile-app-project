@@ -61,23 +61,7 @@ function getStudentProgress($pdo, $studentId, $subjectId = null) {
     $records = $stmt->fetchAll();
 
     if (empty($records)) {
-        return [
-            [
-                'id' => 201, 'subject_name' => 'Mathematics', 'subject_code' => 'MATH101',
-                'marks' => 92.5, 'max_marks' => 100, 'grade' => 'A', 'comments' => 'Outstanding problem-solving skills in algebra.',
-                'date_recorded' => '2026-09-02', 'assessment_title' => 'Unit 1 Math Assessment', 'assessment_type' => 'exam'
-            ],
-            [
-                'id' => 202, 'subject_name' => 'General Science', 'subject_code' => 'SCI101',
-                'marks' => 88.0, 'max_marks' => 100, 'grade' => 'B+', 'comments' => 'Very solid understanding of plant biology.',
-                'date_recorded' => '2026-08-29', 'assessment_title' => 'Biology Lab Practical', 'assessment_type' => 'project'
-            ],
-            [
-                'id' => 203, 'subject_name' => 'English Language', 'subject_code' => 'ENG101',
-                'marks' => 95.0, 'max_marks' => 100, 'grade' => 'A+', 'comments' => 'Excellent vocabulary and essay structure.',
-                'date_recorded' => '2026-08-25', 'assessment_title' => 'Creative Writing Quiz', 'assessment_type' => 'quiz'
-            ]
-        ];
+        return [];
     }
 
     return array_map(function($rec) {

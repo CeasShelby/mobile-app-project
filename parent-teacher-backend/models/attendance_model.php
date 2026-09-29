@@ -35,13 +35,7 @@ function getAttendanceByStudent($pdo, $studentId, $limit = 30) {
     $logs = $stmt->fetchAll();
 
     if (empty($logs)) {
-        return [
-            ['id' => 101, 'date' => '2026-09-04', 'status' => 'present', 'remarks' => 'On time & active in class', 'recorded_by' => 'Sarah Connor'],
-            ['id' => 102, 'date' => '2026-09-03', 'status' => 'present', 'remarks' => 'Great participation in science lab', 'recorded_by' => 'Sarah Connor'],
-            ['id' => 103, 'date' => '2026-09-02', 'status' => 'late', 'remarks' => 'Arrived 10 mins late due to school bus delay', 'recorded_by' => 'Sarah Connor'],
-            ['id' => 104, 'date' => '2026-09-01', 'status' => 'present', 'remarks' => 'Completed all morning assignments', 'recorded_by' => 'Sarah Connor'],
-            ['id' => 105, 'date' => '2026-08-28', 'status' => 'absent', 'remarks' => 'Sick leave notice submitted by parent', 'recorded_by' => 'Sarah Connor']
-        ];
+        return [];
     }
 
     return $logs;
@@ -75,11 +69,14 @@ function getAttendanceSummaryStats($pdo, $studentId) {
     $excusedDays = (int)($sum['excused_days'] ?? 0);
 
     if ($totalDays === 0) {
-        $totalDays = 40;
-        $presentDays = 38;
-        $absentDays = 1;
-        $lateDays = 1;
-        $excusedDays = 0;
+        return [
+            'total_days'   => 0,
+            'present_days' => 0,
+            'absent_days'  => 0,
+            'late_days'    => 0,
+            'excused_days' => 0,
+            'percentage'   => 0.0
+        ];
     }
 
     $percentage = round(($presentDays / $totalDays) * 100, 1);

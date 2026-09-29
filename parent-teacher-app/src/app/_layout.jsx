@@ -5,6 +5,8 @@ import { StyleSheet } from 'react-native';
 
 import { AnimatedSplashOverlay } from '@/components/animated-icon';
 import { AuthProvider } from '@/context/AuthContext';
+import { SyncProvider } from '@/context/SyncContext';
+import { ThemeProvider } from '@/context/ThemeContext';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -19,9 +21,13 @@ function MainAppLayout() {
 
 export default function TabLayout() {
   return (
-    <AuthProvider>
-      <MainAppLayout />
-    </AuthProvider>
+    <ThemeProvider>
+      <AuthProvider>
+        <SyncProvider>
+          <MainAppLayout />
+        </SyncProvider>
+      </AuthProvider>
+    </ThemeProvider>
   );
 }
 

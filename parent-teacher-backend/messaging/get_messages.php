@@ -21,8 +21,26 @@ if ($otherUserId <= 0) {
 try {
     $currentUserId = (int)$currentUser['id'];
 
-    // Fetch direct messages between current user and other user via conversations table
-    $sql = "
+    // 1. Find conversation ID shared between currentUserId and otherUserId
+    $convoStmt = $pdo->prepare("
+        SELECT cp1.conversation_id 
+        FROM conversation_participants cp1
+        JOIN conversation_participants cp2 ON cp1.conversation_id = cp2.conversation_id
+        WHERE cp1.user_id = ? AND cp2.user_id = ?
+        LIMIT 1
+    ");
+    $convoStmt->execute([$currentUserId, $otherUserId]);
+    $convo = $convoStmt->fetch(PDO::FETCH_ASSOC);
+
+    if (!$convo) {
+        echo json_encode([]);
+        exit();
+    }
+
+    $conversationId = (int)$convo['conversation_id'];
+
+    // 2. Fetch all messages in this thread
+    $stmt = $pdo->prepare("
         SELECT 
             m.id,
             m.conversation_id,
@@ -33,35 +51,20 @@ try {
             m.created_at,
             u.full_name AS sender_name
         FROM messages m
-        JOIN conversations c ON m.conversation_id = c.id
         JOIN users u ON m.sender_id = u.id
-        LEFT JOIN parents p ON c.parent_id = p.id
-        LEFT JOIN teachers t ON c.teacher_id = t.id
-        WHERE (p.user_id = ? AND t.user_id = ?)
-           OR (p.user_id = ? AND t.user_id = ?)
-           OR (m.sender_id = ? AND c.id IN (SELECT id FROM conversations WHERE parent_id = ? OR teacher_id = ?))
+        WHERE m.conversation_id = ?
         ORDER BY m.created_at ASC
-    ";
-    
-    $stmt = $pdo->prepare($sql);
-    $stmt->execute([
-        $currentUserId, $otherUserId, $currentUserId,
-        $currentUserId, $otherUserId,
-        $otherUserId, $currentUserId,
-        $currentUserId, $otherUserId, $otherUserId
-    ]);
-    $messages = $stmt->fetchAll();
+    ");
+    $stmt->execute([$currentUserId, $otherUserId, $currentUserId, $conversationId]);
+    $messages = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-    // Mark incoming messages as read
-    if (!empty($messages)) {
-        $updateStmt = $pdo->prepare("
-            UPDATE messages m
-            JOIN conversations c ON m.conversation_id = c.id
-            SET m.is_read = 1 
-            WHERE m.sender_id = ? AND m.is_read = 0
-        ");
-        $updateStmt->execute([$otherUserId]);
-    }
+    // 3. Mark unread messages sent by otherUserId as read
+    $markStmt = $pdo->prepare("
+        UPDATE messages 
+        SET is_read = 1 
+        WHERE conversation_id = ? AND sender_id = ? AND is_read = 0
+    ");
+    $markStmt->execute([$conversationId, $otherUserId]);
 
     echo json_encode($messages ? $messages : []);
 

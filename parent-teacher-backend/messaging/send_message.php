@@ -1,10 +1,21 @@
 <?php
+// Suppress warnings/notices so PHP output is always clean JSON
+ini_set('display_errors', '0');
+error_reporting(0);
+
 // Include database configuration and token validation middleware
 require_once __DIR__ . '/../config.php';
 require_once __DIR__ . '/../auth_middleware.php';
 
-// Set response header to JSON format
-header('Content-Type: application/json');
+header('Content-Type: application/json; charset=utf-8');
+header("Access-Control-Allow-Origin: *");
+header("Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With");
+header("Access-Control-Allow-Methods: GET, POST, OPTIONS");
+
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+    http_response_code(200);
+    exit();
+}
 
 // Authenticate: Ensure the user is logged in
 $currentUser = authenticate_request();
@@ -25,39 +36,30 @@ if ($receiverId <= 0 || empty($messageText)) {
 try {
     $senderId = (int)$currentUser['id'];
 
-    // 1. Check if a conversation thread already exists between sender and receiver
+    // 1. Check if conversation thread exists between sender and receiver
     $cStmt = $pdo->prepare("
-        SELECT c.id 
-        FROM conversations c
-        LEFT JOIN parents p ON c.parent_id = p.id
-        LEFT JOIN teachers t ON c.teacher_id = t.id
-        WHERE (p.user_id = ? AND t.user_id = ?)
-           OR (p.user_id = ? AND t.user_id = ?)
+        SELECT cp1.conversation_id 
+        FROM conversation_participants cp1
+        JOIN conversation_participants cp2 ON cp1.conversation_id = cp2.conversation_id
+        WHERE cp1.user_id = ? AND cp2.user_id = ?
         LIMIT 1
     ");
-    $cStmt->execute([$senderId, $receiverId, $receiverId, $senderId]);
-    $convo = $cStmt->fetch();
+    $cStmt->execute([$senderId, $receiverId]);
+    $convo = $cStmt->fetch(PDO::FETCH_ASSOC);
 
     $conversationId = 0;
 
     if ($convo) {
-        $conversationId = (int)$convo['id'];
+        $conversationId = (int)$convo['conversation_id'];
     } else {
-        // Find parent primary key and teacher primary key
-        $pStmt = $pdo->prepare("SELECT id FROM parents WHERE user_id IN (?, ?)");
-        $pStmt->execute([$senderId, $receiverId]);
-        $parentRow = $pStmt->fetch();
-
-        $tStmt = $pdo->prepare("SELECT id FROM teachers WHERE user_id IN (?, ?)");
-        $tStmt->execute([$senderId, $receiverId]);
-        $teacherRow = $tStmt->fetch();
-
-        $parentId  = $parentRow ? (int)$parentRow['id'] : 1;
-        $teacherId = $teacherRow ? (int)$teacherRow['id'] : 1;
-
-        $insConvo = $pdo->prepare("INSERT INTO conversations (parent_id, teacher_id) VALUES (?, ?)");
-        $insConvo->execute([$parentId, $teacherId]);
+        // Create new conversation thread
+        $insConvo = $pdo->prepare("INSERT INTO conversations (created_at, updated_at) VALUES (CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)");
+        $insConvo->execute();
         $conversationId = (int)$pdo->lastInsertId();
+
+        // Add both participants
+        $pStmt = $pdo->prepare("INSERT IGNORE INTO conversation_participants (conversation_id, user_id) VALUES (?, ?), (?, ?)");
+        $pStmt->execute([$conversationId, $senderId, $conversationId, $receiverId]);
     }
 
     // 2. Insert new message record
@@ -72,14 +74,38 @@ try {
     $pdo->prepare("UPDATE conversations SET updated_at = CURRENT_TIMESTAMP WHERE id = ?")
         ->execute([$conversationId]);
 
+    // 4. Create event notification alert for receiver safely
+    try {
+        $senderStmt = $pdo->prepare("SELECT full_name FROM users WHERE id = ?");
+        $senderStmt->execute([$senderId]);
+        $senderUser = $senderStmt->fetch(PDO::FETCH_ASSOC);
+        $senderName = $senderUser ? $senderUser['full_name'] : 'User';
+
+        $notifStmt = $pdo->prepare("
+            INSERT INTO notifications (recipient_id, type, title, message, payload_json, is_read)
+            VALUES (?, 'message', ?, ?, ?, 0)
+        ");
+        $notifTitle = "New message from " . $senderName;
+        $notifMsg   = mb_substr($messageText, 0, 100);
+        $payload    = json_encode([
+            'conversation_id' => $conversationId,
+            'sender_id'       => $senderId,
+            'message_id'      => $newMessageId,
+        ]);
+        $notifStmt->execute([$receiverId, $notifTitle, $notifMsg, $payload]);
+    } catch (\Exception $e) {
+        // Log notification insertion failure silently
+        error_log("Failed to insert message notification alert: " . $e->getMessage());
+    }
+
     echo json_encode([
         "success" => true,
         "message" => "Message sent successfully",
-        "id"      => $newMessageId
+        "id"      => $newMessageId,
+        "conversation_id" => $conversationId
     ]);
 
 } catch (\PDOException $e) {
     http_response_code(500);
     echo json_encode(["error" => "Database operation failed: " . $e->getMessage()]);
 }
-

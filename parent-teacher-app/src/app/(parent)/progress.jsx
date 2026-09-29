@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { StyleSheet, FlatList, ActivityIndicator, View, TouchableOpacity } from 'react-native';
 import { AuthContext } from '@/context/AuthContext';
+import { getParentDashboard } from '@/services/parent';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { useTheme } from '@/hooks/use-theme';
@@ -13,14 +14,41 @@ export default function ProgressScreen() {
   const { token, user } = useContext(AuthContext);
   const theme = useTheme();
 
+  const [students, setStudents] = useState([]);
+  const [selectedStudent, setSelectedStudent] = useState(null);
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  // 1. Fetch parent's actual linked children
   useEffect(() => {
+    const fetchChildren = async () => {
+      try {
+        setLoading(true);
+        const dashData = await getParentDashboard();
+        const childrenList = dashData?.data?.students || dashData?.students || [];
+
+        if (Array.isArray(childrenList) && childrenList.length > 0) {
+          setStudents(childrenList);
+          setSelectedStudent(childrenList[0]);
+        }
+      } catch (err) {
+        console.log('Failed to fetch parent linked children for progress:', err.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchChildren();
+  }, [token]);
+
+  // 2. Fetch live progress records for selected child
+  useEffect(() => {
+    if (!selectedStudent) return;
+
     const fetchProgress = async () => {
       try {
         setLoading(true);
-        const response = await fetch(`${API_URL}/progress/get_progress.php`, {
+        const response = await fetch(`${API_URL}/progress/get_progress.php?student_id=${selectedStudent.id}`, {
           method: 'GET',
           headers: {
             'Content-Type': 'application/json',
@@ -32,22 +60,25 @@ export default function ProgressScreen() {
           const data = await response.json();
           if (Array.isArray(data)) {
             setRecords(data);
+          } else {
+            setRecords([]);
           }
         }
       } catch (err) {
         console.log('Failed to fetch parent progress data:', err.message);
+        setRecords([]);
       } finally {
         setLoading(false);
       }
     };
 
     fetchProgress();
-  }, [token]);
+  }, [selectedStudent, token]);
 
-  if (loading) {
+  if (loading && !selectedStudent) {
     return (
       <ThemedView style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#208AEF" />
+        <ActivityIndicator size="large" color="#14B8A6" />
       </ThemedView>
     );
   }
@@ -56,15 +87,51 @@ export default function ProgressScreen() {
     <ThemedView style={[styles.container, { backgroundColor: theme.background }]}>
       <FlatList
         data={records}
-        keyExtractor={(item) => item.id.toString()}
+        keyExtractor={(item) => (item.id || Math.random()).toString()}
         contentContainerStyle={styles.listContent}
         ListHeaderComponent={
           <View style={styles.header}>
-            <ThemedText type="subtitle">Academic Report Card</ThemedText>
+            {/* Multi-Child Selector Chips */}
+            {students.length > 1 && (
+              <View style={styles.childChipsRow}>
+                {students.map((child) => {
+                  const isSelected = selectedStudent?.id === child.id;
+                  return (
+                    <TouchableOpacity
+                      key={child.id}
+                      onPress={() => setSelectedStudent(child)}
+                      style={[
+                        styles.childChip,
+                        { backgroundColor: isSelected ? '#14B8A6' : theme.backgroundElement }
+                      ]}
+                    >
+                      <ThemedText style={{ color: isSelected ? '#ffffff' : theme.text, fontWeight: 'bold', fontSize: 12 }}>
+                        {child.full_name}
+                      </ThemedText>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            )}
+
+            <ThemedText type="subtitle">
+              {selectedStudent ? `${selectedStudent.full_name}'s Academic Report` : 'Academic Report Card'}
+            </ThemedText>
             <ThemedText type="small" themeColor="textSecondary">
-              Secondary school subject grades, exam scores, and teacher evaluation comments.
+              Subject grades, UNEB scale scores, and teacher evaluation comments.
             </ThemedText>
           </View>
+        }
+        ListEmptyComponent={
+          !loading && (
+            <ThemedView type="backgroundElement" style={styles.emptyContainer}>
+              <SymbolView tintColor={theme.textSecondary} name="doc.text.magnifyingglass" size={36} />
+              <ThemedText type="smallBold" style={{ marginTop: 8 }}>No Assessment Grades</ThemedText>
+              <ThemedText type="small" themeColor="textSecondary" style={{ textAlign: 'center' }}>
+                {selectedStudent ? `No exam or quiz marks recorded yet for ${selectedStudent.full_name}.` : 'No child linked to account.'}
+              </ThemedText>
+            </ThemedView>
+          )
         }
         renderItem={({ item }) => (
           <ThemedView type="backgroundElement" style={styles.card}>
@@ -78,7 +145,7 @@ export default function ProgressScreen() {
                 </ThemedText>
               </View>
               <View style={styles.gradeBadge}>
-                <ThemedText style={styles.gradeText}>Grade {item.grade}</ThemedText>
+                <ThemedText style={styles.gradeText}>{item.grade}</ThemedText>
               </View>
             </View>
 
@@ -94,33 +161,25 @@ export default function ProgressScreen() {
               )}
             </View>
 
-            <View style={styles.cardFooter}>
-              <View style={styles.teacherInfoRow}>
-                <SymbolView tintColor={theme.textSecondary} name="person.circle" size={14} />
-                <ThemedText type="small" themeColor="textSecondary" style={styles.teacherText}>
-                  Subject Teacher: {item.teacher_name || 'Sarah Jenkins'}
-                </ThemedText>
+            {item.teacher_name && (
+              <View style={styles.cardFooter}>
+                <View style={styles.teacherInfoRow}>
+                  <SymbolView tintColor={theme.textSecondary} name="person.circle" size={14} />
+                  <ThemedText type="small" themeColor="textSecondary" style={styles.teacherText}>
+                    Teacher: {item.teacher_name}
+                  </ThemedText>
+                </View>
+                <TouchableOpacity
+                  style={styles.chatButton}
+                  onPress={() => router.push('/(parent)/messaging')}
+                >
+                  <SymbolView tintColor="#ffffff" name="bubble.left.and.bubble.right.fill" size={12} />
+                  <ThemedText style={styles.chatButtonText}>Chat</ThemedText>
+                </TouchableOpacity>
               </View>
-
-              <TouchableOpacity
-                style={styles.chatButton}
-                onPress={() => router.push('/(parent)/messaging')}
-              >
-                <SymbolView tintColor="#ffffff" name="bubble.left.and.bubble.right.fill" size={12} />
-                <ThemedText style={styles.chatButtonText}>Message Teacher</ThemedText>
-              </TouchableOpacity>
-            </View>
+            )}
           </ThemedView>
         )}
-        ListEmptyComponent={
-          <ThemedView type="backgroundElement" style={styles.emptyContainer}>
-            <SymbolView tintColor={theme.textSecondary} name="tray" size={32} />
-            <ThemedText type="smallBold">No Exam Grades Logged Yet</ThemedText>
-            <ThemedText type="small" themeColor="textSecondary" style={{ textAlign: 'center' }}>
-              Subject teachers have not posted test results for this term yet.
-            </ThemedText>
-          </ThemedView>
-        }
       />
     </ThemedView>
   );
@@ -137,17 +196,25 @@ const styles = StyleSheet.create({
   },
   listContent: {
     padding: Spacing.three,
-    gap: Spacing.three,
+    gap: Spacing.two,
   },
   header: {
     marginBottom: Spacing.two,
     gap: Spacing.half,
   },
+  childChipsRow: {
+    flexDirection: 'row',
+    gap: Spacing.one,
+    marginBottom: Spacing.one,
+  },
+  childChip: {
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.one,
+    borderRadius: 16,
+  },
   card: {
     padding: Spacing.three,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#e2e8f01a',
+    borderRadius: 14,
     gap: Spacing.two,
   },
   cardHeader: {
@@ -159,18 +226,17 @@ const styles = StyleSheet.create({
     fontSize: 15,
   },
   gradeBadge: {
-    backgroundColor: '#208AEF22',
+    backgroundColor: '#14B8A622',
     paddingHorizontal: Spacing.two,
     paddingVertical: Spacing.half,
     borderRadius: 8,
   },
   gradeText: {
-    color: '#208AEF',
+    color: '#14B8A6',
     fontWeight: 'bold',
     fontSize: 13,
   },
   cardBody: {
-    paddingVertical: Spacing.one,
     gap: Spacing.half,
   },
   scoreRow: {
@@ -200,7 +266,7 @@ const styles = StyleSheet.create({
     fontSize: 11,
   },
   chatButton: {
-    backgroundColor: '#208AEF',
+    backgroundColor: '#14B8A6',
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: Spacing.two,
@@ -219,5 +285,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     gap: Spacing.one,
+    marginTop: Spacing.three,
   },
 });

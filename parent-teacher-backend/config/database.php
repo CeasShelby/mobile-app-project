@@ -1,4 +1,6 @@
 <?php
+ini_set('display_errors', '0');
+error_reporting(0);
 // ============================================================
 // Database Configuration & Connection Pool
 // File: parent-teacher-backend/config/database.php
@@ -38,15 +40,20 @@ $options = [
 ];
 
 try {
-    // Create the global PDO database connection instance
+    // Create the global PDO database connection instance (try password 'root' first)
     $pdo = new PDO($dsn, $user, $pass, $options);
 } catch (\PDOException $e) {
-    // If database connection fails, return 500 Internal Server Error in JSON format
-    http_response_code(500);
-    header('Content-Type: application/json');
-    echo json_encode([
-        "success" => false,
-        "message" => "Database connection error: " . $e->getMessage()
-    ]);
-    exit();
+    // Fallback: Try connecting with empty password '' (default for XAMPP / WAMP on Windows)
+    try {
+        $pdo = new PDO($dsn, $user, '', $options);
+    } catch (\PDOException $e2) {
+        // If database connection fails, return 500 Internal Server Error in JSON format
+        http_response_code(500);
+        header('Content-Type: application/json');
+        echo json_encode([
+            "success" => false,
+            "message" => "Database connection error: " . $e2->getMessage()
+        ]);
+        exit();
+    }
 }

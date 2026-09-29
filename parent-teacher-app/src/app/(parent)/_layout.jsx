@@ -1,9 +1,12 @@
+import { Platform } from 'react-native';
 import { Tabs } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
 import { useTheme } from '@/hooks/use-theme';
+import { useSync } from '@/context/SyncContext';
 
 export default function ParentLayout() {
   const theme = useTheme();
+  const { unreadCounts } = useSync();
 
   return (
     <Tabs
@@ -13,12 +16,28 @@ export default function ParentLayout() {
           backgroundColor: theme.background,
         },
         headerTintColor: theme.text,
+
         tabBarStyle: {
           backgroundColor: theme.background,
           borderTopColor: theme.backgroundElement,
         },
-        tabBarActiveTintColor: '#208AEF',
+        tabBarActiveTintColor: '#14B8A6',
         tabBarInactiveTintColor: theme.textSecondary,
+        tabBarBadgeStyle: {
+          backgroundColor: '#FF3B30',
+          color: '#FFFFFF',
+          fontSize: 10,
+          fontWeight: 'bold',
+          borderRadius: 10,
+          minWidth: 20,
+          height: 20,
+          lineHeight: Platform.OS === 'ios' ? 20 : 18,
+          textAlign: 'center',
+          paddingHorizontal: 4,
+          borderWidth: 0,
+          borderColor: 'transparent',
+          overflow: 'hidden',
+        },
       }}
     >
       <Tabs.Screen
@@ -68,6 +87,7 @@ export default function ParentLayout() {
         options={{
           title: 'Teacher Chat',
           tabBarLabel: 'Messages',
+          tabBarBadge: unreadCounts?.unread_messages > 0 ? unreadCounts.unread_messages : undefined,
           tabBarIcon: ({ color, size }) => (
             <SymbolView
               tintColor={color}
@@ -82,6 +102,7 @@ export default function ParentLayout() {
         options={{
           title: 'Announcements',
           tabBarLabel: 'School Feed',
+          tabBarBadge: unreadCounts?.unread_notifications > 0 ? unreadCounts.unread_notifications : undefined,
           tabBarIcon: ({ color, size }) => (
             <SymbolView
               tintColor={color}

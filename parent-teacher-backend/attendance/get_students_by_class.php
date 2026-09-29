@@ -22,22 +22,22 @@ try {
     $stmt = $pdo->prepare("
         SELECT 
             s.id,
-            COALESCE(s.admission_number, s.student_number) as admission_number,
-            TRIM(CONCAT(IFNULL(s.first_name, ''), ' ', IFNULL(s.last_name, ''))) as full_name,
+            COALESCE(s.admission_number, CONCAT('STU-', s.id)) as admission_number,
+            COALESCE(NULLIF(s.full_name, ''), TRIM(CONCAT(IFNULL(s.first_name, ''), ' ', IFNULL(s.last_name, ''))), 'Student') as full_name,
             s.gender,
             s.class_id,
             c.class_name,
-            COALESCE(a.status, 'present') as today_status,
+            COALESCE(LOWER(a.status), 'present') as today_status,
             COALESCE(a.remarks, '') as today_remarks,
             a.id as attendance_record_id
         FROM students s
         JOIN classes c ON s.class_id = c.id
         LEFT JOIN attendance a ON s.id = a.student_id AND a.attendance_date = ?
-        WHERE s.class_id = ? AND s.status = 'active'
-        ORDER BY s.first_name ASC, s.last_name ASC
+        WHERE s.class_id = ? AND (s.status = 'active' OR s.status IS NULL)
+        ORDER BY s.full_name ASC
     ");
     $stmt->execute([$date, $classId]);
-    $students = $stmt->fetchAll();
+    $students = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
     echo json_encode($students ? $students : []);
 

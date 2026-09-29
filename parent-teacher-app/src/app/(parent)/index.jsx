@@ -14,15 +14,22 @@ import { ThemedView } from '@/components/themed-view';
 import { useTheme } from '@/hooks/use-theme';
 import { Spacing } from '@/constants/theme';
 import { SymbolView } from 'expo-symbols';
+import { useSync } from '@/context/SyncContext';
 import { useRouter } from 'expo-router';
+import { NotificationCenterModal } from '@/components/NotificationCenterModal';
+import { ProfileEditModal } from '@/components/ProfileEditModal';
 
 export default function ParentDashboard() {
   const { user, logout } = useContext(AuthContext);
+  const { unreadCounts } = useSync();
   const router = useRouter();
   const theme = useTheme();
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [showProfileModal, setShowProfileModal] = useState(false);
+  const [showNotifModal, setShowNotifModal] = useState(false);
+  const [selectedStudentIndex, setSelectedStudentIndex] = useState(0);
   const [error, setError] = useState(null);
   const [data, setData] = useState({
     parent_name: user?.full_name || 'Parent',
@@ -40,8 +47,9 @@ export default function ParentDashboard() {
 
     try {
       const res = await getParentDashboard();
-      if (res && res.students) {
-        setData(res);
+      const payload = res?.data || res;
+      if (payload && Array.isArray(payload.students)) {
+        setData(payload);
       }
     } catch (err) {
       console.log('Parent dashboard fetch error:', err.message);
@@ -78,8 +86,8 @@ export default function ParentDashboard() {
         <RefreshControl
           refreshing={refreshing}
           onRefresh={() => loadDashboardData(true)}
-          tintColor="#208AEF"
-          colors={['#208AEF']}
+          tintColor="#14B8A6"
+          colors={['#14B8A6']}
         />
       }
     >
@@ -87,7 +95,7 @@ export default function ParentDashboard() {
         {/* Welcome Header */}
         <ThemedView type="backgroundElement" style={styles.heroCard}>
           <View style={styles.heroRow}>
-            <View>
+            <View style={{ flex: 1 }}>
               <ThemedText type="small" themeColor="textSecondary">Welcome Back,</ThemedText>
               <ThemedText type="subtitle" style={styles.parentName}>
                 {data.parent_name || user?.full_name}
@@ -96,16 +104,166 @@ export default function ParentDashboard() {
                 Parent Dashboard • {data.students.length} Linked {data.students.length === 1 ? 'Child' : 'Children'}
               </ThemedText>
             </View>
-            <TouchableOpacity onPress={logout} style={styles.logoutButton} activeOpacity={0.7}>
-              <SymbolView tintColor="#FF3B30" name="power" size={20} />
-            </TouchableOpacity>
+
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.two }}>
+              {/* Profile button */}
+              <TouchableOpacity
+                onPress={() => setShowProfileModal(true)}
+                style={[styles.logoutButton, { backgroundColor: theme.backgroundSelected }]}
+                activeOpacity={0.7}
+              >
+                <SymbolView tintColor="#14B8A6" name="person.crop.circle" size={20} />
+              </TouchableOpacity>
+
+              {/* Notifications bell button */}
+              <TouchableOpacity
+                onPress={() => setShowNotifModal(true)}
+                style={[styles.logoutButton, { backgroundColor: theme.backgroundSelected, position: 'relative' }]}
+                activeOpacity={0.7}
+              >
+                <SymbolView tintColor="#14B8A6" name="bell.fill" size={20} />
+                {unreadCounts?.total_unread > 0 && (
+                  <View style={styles.heroBadgeDot}>
+                    <ThemedText style={styles.heroBadgeText}>
+                      {unreadCounts.total_unread > 99 ? '99+' : unreadCounts.total_unread}
+                    </ThemedText>
+                  </View>
+                )}
+              </TouchableOpacity>
+
+              {/* Logout / Power button */}
+              <TouchableOpacity onPress={logout} style={styles.logoutButton} activeOpacity={0.7}>
+                <SymbolView tintColor="#FF3B30" name="power" size={20} />
+              </TouchableOpacity>
+            </View>
           </View>
         </ThemedView>
+
+        <NotificationCenterModal visible={showNotifModal} onClose={() => setShowNotifModal(false)} />
+        <ProfileEditModal visible={showProfileModal} onClose={() => setShowProfileModal(false)} />
+
+        {/* Unique Child Performance & Activity Overview Widget */}
+        {data.students && data.students.length > 0 && (() => {
+          const activeStudent = data.students[selectedStudentIndex] || data.students[0];
+          const latestGrade = activeStudent.recent_grades && activeStudent.recent_grades.length > 0
+            ? activeStudent.recent_grades[0]
+            : null;
+
+          return (
+            <ThemedView type="backgroundElement" style={styles.overviewContainer}>
+              <View style={styles.overviewHeader}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <View style={styles.overviewHeaderIcon}>
+                    <SymbolView tintColor="#14B8A6" name="chart.bar.doc.horizontal.fill" size={18} />
+                  </View>
+                  <ThemedText type="smallBold" style={styles.overviewTitle}>
+                    CHILD QUICK OVERVIEW
+                  </ThemedText>
+                </View>
+
+                {/* Switch child tabs if > 1 child */}
+                {data.students.length > 1 && (
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
+                    {data.students.map((st, idx) => (
+                      <TouchableOpacity
+                        key={st.id}
+                        onPress={() => setSelectedStudentIndex(idx)}
+                        style={[
+                          styles.childTabPill,
+                          selectedStudentIndex === idx && styles.childTabPillActive
+                        ]}
+                      >
+                        <ThemedText style={[
+                          styles.childTabPillText,
+                          selectedStudentIndex === idx && styles.childTabPillTextActive
+                        ]}>
+                          {st.full_name.split(' ')[0]}
+                        </ThemedText>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                )}
+              </View>
+
+              {/* 3 Interactive Highlight Cards */}
+              <View style={styles.cardsGrid}>
+                {/* Card 1: Attendance */}
+                <TouchableOpacity
+                  style={styles.highlightCard}
+                  activeOpacity={0.8}
+                  onPress={() => router.push('/(parent)/attendance')}
+                >
+                  <View style={[styles.iconCircle, { backgroundColor: '#34C7591A' }]}>
+                    <SymbolView tintColor="#34C759" name="calendar.badge.clock" size={18} />
+                  </View>
+                  <View style={styles.cardContent}>
+                    <ThemedText type="small" themeColor="textSecondary" style={styles.cardLabel}>Attendance</ThemedText>
+                    <ThemedText type="subtitle" style={getAttendanceStyle(activeStudent.attendance.percentage)}>
+                      {activeStudent.attendance.percentage}%
+                    </ThemedText>
+                    <ThemedText type="small" themeColor="textSecondary" style={styles.subStatText}>
+                      {activeStudent.attendance.present_days}/{activeStudent.attendance.total_days} Days
+                    </ThemedText>
+                  </View>
+                  <ThemedText style={styles.cardLinkText}>View Log →</ThemedText>
+                </TouchableOpacity>
+
+                {/* Card 2: Recent Performance */}
+                <TouchableOpacity
+                  style={styles.highlightCard}
+                  activeOpacity={0.8}
+                  onPress={() => router.push('/(parent)/progress')}
+                >
+                  <View style={[styles.iconCircle, { backgroundColor: '#8B5CF61A' }]}>
+                    <SymbolView tintColor="#8B5CF6" name="rosette" size={18} />
+                  </View>
+                  <View style={styles.cardContent}>
+                    <ThemedText type="small" themeColor="textSecondary" style={styles.cardLabel}>Latest Result</ThemedText>
+                    {latestGrade ? (
+                      <>
+                        <ThemedText type="subtitle" style={{ color: '#8B5CF6', fontWeight: 'bold' }}>
+                          {latestGrade.grade} ({latestGrade.marks}%)
+                        </ThemedText>
+                        <ThemedText type="small" themeColor="textSecondary" numberOfLines={1} style={styles.subStatText}>
+                          {latestGrade.subject_name}
+                        </ThemedText>
+                      </>
+                    ) : (
+                      <ThemedText type="smallBold" style={{ marginTop: 2 }}>No Marks</ThemedText>
+                    )}
+                  </View>
+                  <ThemedText style={[styles.cardLinkText, { color: '#8B5CF6' }]}>Marks →</ThemedText>
+                </TouchableOpacity>
+
+                {/* Card 3: Class Teacher Direct Chat */}
+                <TouchableOpacity
+                  style={styles.highlightCard}
+                  activeOpacity={0.8}
+                  onPress={() => router.push('/(parent)/messaging')}
+                >
+                  <View style={[styles.iconCircle, { backgroundColor: '#FF95001A' }]}>
+                    <SymbolView tintColor="#FF9500" name="bubble.left.and.bubble.right.fill" size={18} />
+                  </View>
+                  <View style={styles.cardContent}>
+                    <ThemedText type="small" themeColor="textSecondary" style={styles.cardLabel}>Class Teacher</ThemedText>
+                    <ThemedText type="smallBold" numberOfLines={1} style={{ fontSize: 13, marginTop: 2 }}>
+                      {activeStudent.homeroom_teacher || 'Assigned Teacher'}
+                    </ThemedText>
+                    <ThemedText type="small" themeColor="textSecondary" style={styles.subStatText}>
+                      {activeStudent.class_name}
+                    </ThemedText>
+                  </View>
+                  <ThemedText style={[styles.cardLinkText, { color: '#FF9500' }]}>Chat 💬</ThemedText>
+                </TouchableOpacity>
+              </View>
+            </ThemedView>
+          );
+        })()}
 
         {/* Loading Spinner */}
         {loading && !refreshing && (
           <View style={styles.loadingBox}>
-            <ActivityIndicator size="large" color="#208AEF" />
+            <ActivityIndicator size="large" color="#14B8A6" />
             <ThemedText type="small" themeColor="textSecondary" style={styles.loadingText}>
               Loading student progress & attendance...
             </ThemedText>
@@ -138,7 +296,7 @@ export default function ParentDashboard() {
 
             {data.students.length === 0 && !error ? (
               <ThemedView type="backgroundElement" style={styles.emptyBox}>
-                <SymbolView tintColor="#208AEF" name="person.crop.circle.badge.questionmark" size={32} />
+                <SymbolView tintColor="#14B8A6" name="person.crop.circle.badge.questionmark" size={32} />
                 <ThemedText type="smallBold" style={styles.emptyTitle}>No Children Linked</ThemedText>
                 <ThemedText type="small" themeColor="textSecondary" style={styles.emptyText}>
                   No active student records are linked to your parent account yet. Please contact the administration office.
@@ -228,7 +386,7 @@ export default function ParentDashboard() {
                 {data.announcements.map((announcement) => (
                   <ThemedView key={announcement.id} type="backgroundElement" style={styles.announcementCard}>
                     <View style={styles.announcementHeader}>
-                      <SymbolView tintColor="#208AEF" name="megaphone.fill" size={18} />
+                      <SymbolView tintColor="#14B8A6" name="megaphone.fill" size={18} />
                       <ThemedText type="smallBold" style={styles.announcementTitle}>
                         {announcement.title}
                       </ThemedText>
@@ -248,7 +406,7 @@ export default function ParentDashboard() {
 
             {/* Quick Navigation Help Box */}
             <ThemedView type="backgroundElement" style={styles.helpBox}>
-              <SymbolView tintColor="#208AEF" name="info.circle.fill" size={18} />
+              <SymbolView tintColor="#14B8A6" name="info.circle.fill" size={18} />
               <ThemedText type="small" style={styles.helpText}>
                 Use the bottom navigation tabs to view complete academic progress reports, full attendance logs, or chat directly with teachers.
               </ThemedText>
@@ -267,7 +425,7 @@ const styles = StyleSheet.create({
   container: {
     padding: Spacing.three,
     gap: Spacing.three,
-    paddingBottom: Spacing.four,
+    paddingBottom: 100,
   },
   heroCard: {
     padding: Spacing.four,
@@ -324,7 +482,7 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
   },
   retryText: {
-    color: '#208AEF',
+    color: '#14B8A6',
   },
   sectionHeader: {
     marginTop: Spacing.two,
@@ -365,12 +523,12 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: '#208AEF22',
+    backgroundColor: '#14B8A622',
     justifyContent: 'center',
     alignItems: 'center',
   },
   avatarText: {
-    color: '#208AEF',
+    color: '#14B8A6',
     fontWeight: 'bold',
     fontSize: 17,
   },
@@ -421,7 +579,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     gap: Spacing.one,
     borderLeftWidth: 3,
-    borderLeftColor: '#208AEF',
+    borderLeftColor: '#14B8A6',
   },
   announcementHeader: {
     flexDirection: 'row',
@@ -450,13 +608,33 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: 'center',
     gap: Spacing.two,
-    backgroundColor: '#208AEF10',
+    backgroundColor: '#14B8A610',
     marginTop: Spacing.two,
   },
   helpText: {
     flex: 1,
     fontSize: 13,
     opacity: 0.9,
+  },
+  heroBadgeDot: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    backgroundColor: '#FF3B30',
+    minWidth: 20,
+    height: 20,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+    borderWidth: 0,
+  },
+  heroBadgeText: {
+    color: '#ffffff',
+    fontSize: 10,
+    fontWeight: '800',
+    textAlign: 'center',
+    includeFontPadding: false,
   },
   viewProfileBtn: {
     paddingVertical: 10,
@@ -466,7 +644,79 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   viewProfileText: {
-    color: '#208AEF',
+    color: '#14B8A6',
     fontSize: 13,
+  },
+  overviewContainer: {
+    padding: Spacing.four,
+    borderRadius: 16,
+    gap: Spacing.three,
+    borderWidth: 1,
+    borderColor: '#e2e8f01a',
+  },
+  overviewHeader: {
+    gap: 8,
+  },
+  overviewHeaderIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    backgroundColor: '#14B8A61F',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  overviewTitle: {
+    letterSpacing: 0.8,
+  },
+  childTabPill: {
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 12,
+    backgroundColor: '#e2e8f030',
+  },
+  childTabPillActive: {
+    backgroundColor: '#14B8A6',
+  },
+  childTabPillText: {
+    fontSize: 12,
+    fontWeight: '600',
+    opacity: 0.7,
+  },
+  childTabPillTextActive: {
+    color: '#FFFFFF',
+    opacity: 1,
+  },
+  cardsGrid: {
+    flexDirection: 'row',
+    gap: Spacing.two,
+  },
+  highlightCard: {
+    flex: 1,
+    padding: Spacing.two,
+    borderRadius: 14,
+    backgroundColor: '#e2e8f010',
+    borderWidth: 1,
+    borderColor: '#e2e8f01f',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  iconCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cardContent: {
+    gap: 2,
+  },
+  cardLabel: {
+    fontSize: 11,
+  },
+  cardLinkText: {
+    color: '#34C759',
+    fontSize: 11,
+    fontWeight: '700',
+    alignSelf: 'flex-start',
   },
 });

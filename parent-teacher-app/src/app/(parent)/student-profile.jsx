@@ -37,16 +37,10 @@ export default function StudentProfileScreen() {
   const [activeTab, setActiveTab] = useState('overview'); // 'overview' | 'attendance' | 'academic'
 
   const fetchProfile = useCallback(async () => {
-    if (!studentId) {
-      setError('No student ID provided.');
-      setLoading(false);
-      return;
-    }
-
     try {
       setError(null);
-      const res = await getStudentProfile(studentId);
-      setData(res.data);
+      const res = await getStudentProfile(studentId || 0);
+      setData(res.data || res);
     } catch (err) {
       console.error('Failed to load student profile:', err);
       setError(err.message || 'Unable to connect to school server.');
@@ -103,7 +97,7 @@ export default function StudentProfileScreen() {
   if (loading && !refreshing) {
     return (
       <View style={[styles.centerBox, { backgroundColor: theme.background }]}>
-        <ActivityIndicator size="large" color="#208AEF" />
+        <ActivityIndicator size="large" color="#14B8A6" />
         <ThemedText type="small" themeColor="textSecondary" style={styles.loadingText}>
           Loading student record...
         </ThemedText>
@@ -136,7 +130,7 @@ export default function StudentProfileScreen() {
         <RefreshControl
           refreshing={refreshing}
           onRefresh={onRefresh}
-          colors={['#208AEF']}
+          colors={['#14B8A6']}
         />
       }
     >
@@ -162,7 +156,7 @@ export default function StudentProfileScreen() {
               Admission No: {student?.admission_number}
             </ThemedText>
             <ThemedText type="small" themeColor="textSecondary">
-              {student?.class_name} • {student?.grade_level}
+              {student?.class_name} • {student?.grade_level >= 5 ? 'A-Level Secondary' : 'O-Level Secondary'}
             </ThemedText>
             <ThemedText type="small" themeColor="textSecondary">
               Gender: {student?.gender} • DOB: {student?.date_of_birth}
@@ -218,7 +212,7 @@ export default function StudentProfileScreen() {
           {/* Quick Metrics Grid */}
           <View style={styles.metricsGrid}>
             <ThemedView type="backgroundElement" style={styles.metricCard}>
-              <SymbolView tintColor="#208AEF" name="chart.bar.fill" size={24} />
+              <SymbolView tintColor="#14B8A6" name="chart.bar.fill" size={24} />
               <ThemedText type="title" style={styles.metricVal}>
                 {attendance?.percentage}%
               </ThemedText>
@@ -247,7 +241,7 @@ export default function StudentProfileScreen() {
           <ThemedView type="backgroundElement" style={styles.contactCard}>
             <View style={styles.contactHeader}>
               <View style={styles.teacherAvatar}>
-                <SymbolView tintColor="#208AEF" name="person.crop.circle" size={28} />
+                <SymbolView tintColor="#14B8A6" name="person.crop.circle" size={28} />
               </View>
               <View style={styles.contactInfo}>
                 <ThemedText type="smallBold" style={styles.contactName}>
@@ -266,7 +260,7 @@ export default function StudentProfileScreen() {
                 style={styles.actionBtn}
                 onPress={() => router.push('/(parent)/messaging')}
               >
-                <SymbolView tintColor="#208AEF" name="bubble.left.and.bubble.right.fill" size={16} />
+                <SymbolView tintColor="#14B8A6" name="bubble.left.and.bubble.right.fill" size={16} />
                 <ThemedText type="smallBold" style={styles.actionBtnText}>Send Message</ThemedText>
               </TouchableOpacity>
 
@@ -445,7 +439,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   retryBtn: {
-    backgroundColor: '#208AEF',
+    backgroundColor: '#14B8A6',
     paddingHorizontal: 20,
     paddingVertical: 10,
     borderRadius: 8,
@@ -466,7 +460,7 @@ const styles = StyleSheet.create({
     width: 60,
     height: 60,
     borderRadius: 30,
-    backgroundColor: '#208AEF',
+    backgroundColor: '#14B8A6',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 16,
@@ -517,7 +511,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   tabItemActive: {
-    backgroundColor: '#208AEF',
+    backgroundColor: '#14B8A6',
   },
   tabText: {
     fontSize: 13,
@@ -551,7 +545,7 @@ const styles = StyleSheet.create({
   sectionHeader: {
     fontSize: 12,
     letterSpacing: 0.8,
-    color: '#208AEF',
+    color: '#14B8A6',
     marginTop: 8,
     marginBottom: 4,
   },
@@ -592,7 +586,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   actionBtnText: {
-    color: '#208AEF',
+    color: '#14B8A6',
   },
   actionBtnSecondary: {
     flexDirection: 'row',
@@ -681,7 +675,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   marksVal: {
-    color: '#208AEF',
+    color: '#14B8A6',
   },
   commentBox: {
     marginTop: 8,

@@ -10,7 +10,7 @@ export default function IndexRedirect() {
   if (loading) {
     return (
       <ThemedView style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#208AEF" />
+        <ActivityIndicator size="large" color="#14B8A6" />
       </ThemedView>
     );
   }

@@ -38,6 +38,7 @@ function findStudentById($pdo, $studentId) {
             s.gender,
             s.status,
             s.class_id,
+            s.combination,
             c.class_name,
             {$gradeSelect}
         FROM students s

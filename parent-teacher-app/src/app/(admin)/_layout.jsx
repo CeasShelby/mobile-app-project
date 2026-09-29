@@ -1,9 +1,12 @@
+import { Platform } from 'react-native';
 import { Tabs } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
 import { useTheme } from '@/hooks/use-theme';
+import { useSync } from '@/context/SyncContext';
 
 export default function AdminLayout() {
   const theme = useTheme();
+  const { unreadCounts } = useSync();
 
   return (
     <Tabs
@@ -17,8 +20,23 @@ export default function AdminLayout() {
           backgroundColor: theme.background,
           borderTopColor: theme.backgroundElement,
         },
-        tabBarActiveTintColor: '#FF3B30',
+        tabBarActiveTintColor: '#8B5CF6',
         tabBarInactiveTintColor: theme.textSecondary,
+        tabBarBadgeStyle: {
+          backgroundColor: '#FF3B30',
+          color: '#FFFFFF',
+          fontSize: 10,
+          fontWeight: 'bold',
+          borderRadius: 10,
+          minWidth: 20,
+          height: 20,
+          lineHeight: Platform.OS === 'ios' ? 20 : 18,
+          textAlign: 'center',
+          paddingHorizontal: 4,
+          borderWidth: 0,
+          borderColor: 'transparent',
+          overflow: 'hidden',
+        },
       }}
     >
       <Tabs.Screen
@@ -82,6 +100,7 @@ export default function AdminLayout() {
         options={{
           title: 'System Bulletins',
           tabBarLabel: 'Bulletins',
+          tabBarBadge: unreadCounts?.unread_notifications > 0 ? unreadCounts.unread_notifications : undefined,
           tabBarIcon: ({ color, size }) => (
             <SymbolView
               tintColor={color}

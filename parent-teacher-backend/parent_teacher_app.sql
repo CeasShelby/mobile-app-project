@@ -301,11 +301,13 @@ CREATE TABLE `announcements` (
   `title` VARCHAR(255) NOT NULL,
   `content` TEXT NOT NULL,
   `target_audience` ENUM('all', 'parents', 'teachers') DEFAULT 'all',
+  `class_id` INT DEFAULT NULL,
   `created_by` INT NOT NULL, -- References users.id
   `is_published` TINYINT(1) DEFAULT 1,
   `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  FOREIGN KEY (`created_by`) REFERENCES `users` (`id`) ON DELETE CASCADE
+  FOREIGN KEY (`created_by`) REFERENCES `users` (`id`) ON DELETE CASCADE,
+  FOREIGN KEY (`class_id`) REFERENCES `classes` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ------------------------------------------------------------
@@ -347,10 +349,11 @@ INSERT INTO `parents` (`id`, `user_id`, `occupation`, `address`, `emergency_cont
 INSERT INTO `academic_periods` (`id`, `academic_year`, `term_name`, `start_date`, `end_date`, `is_active`) VALUES
 (1, '2026', 'Term 1', '2026-01-10', '2026-04-15', 1);
 
--- Seed Classes
+-- Seed Classes (Ugandan Secondary School Streams: S.1 to S.6)
 INSERT INTO `classes` (`id`, `class_name`, `grade_level`) VALUES
-(1, 'Grade 5A', 5),
-(2, 'Grade 5B', 5);
+(1, 'Senior 1 East', 1),
+(2, 'Senior 3 Science', 3),
+(3, 'Senior 5 PCM', 5);
 
 -- Seed Subjects
 INSERT INTO `subjects` (`id`, `subject_code`, `subject_name`) VALUES
@@ -368,9 +371,11 @@ INSERT INTO `parent_students` (`parent_id`, `student_id`, `relationship_type`) V
 (1, 1, 'father'),
 (1, 2, 'father');
 
--- Seed Teacher Assignments
+-- Seed Teacher Assignments (Assigned across S.1 East, S.3 Science, S.5 PCM)
 INSERT INTO `teacher_classes` (`teacher_id`, `class_id`, `academic_period_id`, `is_homeroom_teacher`) VALUES
-(1, 1, 1, 1);
+(1, 1, 1, 1),
+(1, 2, 1, 0),
+(1, 3, 1, 0);
 
 INSERT INTO `teacher_subjects` (`teacher_id`, `subject_id`, `class_id`) VALUES
 (1, 1, 1),

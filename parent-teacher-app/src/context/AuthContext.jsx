@@ -18,7 +18,7 @@ export const AuthProvider = ({ children }) => {
   const [token, setToken] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // 1. Load saved session credentials on app startup & validate token
+  // 1. Load saved session credentials on app startup & validate token in background
   useEffect(() => {
     const initializeAuth = async () => {
       try {
@@ -29,16 +29,17 @@ export const AuthProvider = ({ children }) => {
           setToken(savedToken);
           if (savedUser) {
             setUser(JSON.parse(savedUser));
+            // Instantly unblock initial app UI using cached user profile
+            setLoading(false);
           }
 
-          // Validate token with live backend profile endpoint
+          // Non-blocking background token verification
           try {
             const liveProfile = await fetchUserProfile();
             setUser(liveProfile);
             await AsyncStorage.setItem('userProfile', JSON.stringify(liveProfile));
           } catch (valErr) {
             console.log('Session verification check:', valErr.message);
-            // If token expired (401), clear invalid session
             if (valErr.message?.includes('401') || valErr.message?.includes('expired') || valErr.message?.includes('required')) {
               await AsyncStorage.removeItem('userToken');
               await AsyncStorage.removeItem('userProfile');

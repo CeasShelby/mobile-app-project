@@ -33,8 +33,16 @@ if ($studentId <= 0 || $classId <= 0 || empty($attendanceDate) || empty($status)
 }
 
 try {
-    // Resolve teacher ID if teacher_id key in JWT is missing
-    $teacherId = isset($currentUser['teacher_id']) ? (int)$currentUser['teacher_id'] : 1;
+    // Resolve teacher ID from JWT payload; look up from DB if not embedded
+    $teacherId = isset($currentUser['teacher_id']) && (int)$currentUser['teacher_id'] > 0
+        ? (int)$currentUser['teacher_id']
+        : null;
+    if ($teacherId === null) {
+        $tRow = $pdo->prepare("SELECT id FROM teachers WHERE user_id = ?");
+        $tRow->execute([(int)$currentUser['id']]);
+        $tFetch = $tRow->fetch();
+        $teacherId = $tFetch ? (int)$tFetch['id'] : null;
+    }
 
     // 1. Check if an attendance log already exists for this student on this date
     $checkStmt = $pdo->prepare("SELECT id FROM attendance WHERE student_id = ? AND attendance_date = ?");
@@ -60,6 +68,7 @@ try {
 
     // 4. Trigger Parent Notification for Absent or Late status (Parent-Teacher Communication)
     if (in_array(strtolower($status), ['absent', 'late'])) {
+        // Live DB students uses first_name + last_name (not full_name)
         $pStmt = $pdo->prepare("
             SELECT p.user_id, TRIM(CONCAT(IFNULL(s.first_name, ''), ' ', IFNULL(s.last_name, ''))) as student_name
             FROM parent_students ps
@@ -71,9 +80,10 @@ try {
         $parents = $pStmt->fetchAll();
 
         foreach ($parents as $parent) {
-            $sName = !empty($parent['student_name']) ? $parent['student_name'] : "Your child";
+            $sName = !empty($parent['student_name']) ? trim($parent['student_name']) : "Your child";
+            // Live DB notifications: use recipient_id (not user_id)
             $nStmt = $pdo->prepare("
-                INSERT INTO notifications (user_id, title, message, type, is_read)
+                INSERT INTO notifications (recipient_id, title, message, type, is_read)
                 VALUES (?, ?, ?, 'attendance', 0)
             ");
             $nStmt->execute([

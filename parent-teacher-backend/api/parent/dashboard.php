@@ -21,20 +21,12 @@ try {
     // 3. Fetch linked active students via Model Function
     $students = getLinkedStudentsForParent($pdo, $parentId);
 
-    // Auto-link active demo students if this parent has no linked children yet
-    if (empty($students)) {
-        try {
-            $pdo->exec("INSERT IGNORE INTO parent_students (parent_id, student_id, relationship_type) SELECT {$parentId}, id, 'father' FROM students WHERE status = 'active' LIMIT 2");
-            $students = getLinkedStudentsForParent($pdo, $parentId);
-        } catch (Exception $ignored) {}
-    }
-
     $studentsData = [];
 
     // 4. Populate child attendance stats & latest grades using Model Functions
     foreach ($students as $s) {
         $studentId = (int)$s['id'];
-        $classId   = (int)$s['class_id'];
+        $classId   = (int)($s['class_id'] ?? 0);
 
         $attStats = getAttendanceSummaryStats($pdo, $studentId);
         $academicSummary = getStudentAcademicSummary($pdo, $studentId);
@@ -45,7 +37,7 @@ try {
             'admission_number' => $s['admission_number'] ?: ('STU-2026-0' . $studentId),
             'full_name' => $s['full_name'],
             'class_id' => $classId,
-            'class_name' => $s['class_name'] ?: 'Grade 5A',
+            'class_name' => $s['class_name'] ?: 'Unassigned Class',
             'relationship' => ucfirst($s['relationship_type'] ?: 'guardian'),
             'homeroom_teacher' => $teacherObj['name'],
             'attendance' => $attStats,

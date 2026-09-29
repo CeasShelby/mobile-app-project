@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useContext } from 'react';
-import { StyleSheet, FlatList, ActivityIndicator, View } from 'react-native';
+import { StyleSheet, FlatList, ActivityIndicator, View, TouchableOpacity } from 'react-native';
 import { AuthContext } from '@/context/AuthContext';
+import { getParentDashboard } from '@/services/parent';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { useTheme } from '@/hooks/use-theme';
@@ -9,17 +10,44 @@ import { API_URL } from '@/constants/api';
 import { SymbolView } from 'expo-symbols';
 
 export default function AttendanceScreen() {
-  const { token } = useContext(AuthContext);
+  const { token, user } = useContext(AuthContext);
   const theme = useTheme();
 
+  const [students, setStudents] = useState([]);
+  const [selectedStudent, setSelectedStudent] = useState(null);
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  // 1. Fetch parent's actual linked children
   useEffect(() => {
+    const fetchChildren = async () => {
+      try {
+        setLoading(true);
+        const dashData = await getParentDashboard();
+        const childrenList = dashData?.data?.students || dashData?.students || [];
+        
+        if (Array.isArray(childrenList) && childrenList.length > 0) {
+          setStudents(childrenList);
+          setSelectedStudent(childrenList[0]);
+        }
+      } catch (err) {
+        console.log('Failed to fetch parent linked children:', err.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchChildren();
+  }, [token]);
+
+  // 2. Fetch live attendance records for selected linked child
+  useEffect(() => {
+    if (!selectedStudent) return;
+
     const fetchAttendance = async () => {
       try {
         setLoading(true);
-        const response = await fetch(`${API_URL}/attendance/get_attendance.php?student_id=1`, {
+        const response = await fetch(`${API_URL}/attendance/get_attendance.php?student_id=${selectedStudent.id}`, {
           method: 'GET',
           headers: {
             'Content-Type': 'application/json',
@@ -27,54 +55,26 @@ export default function AttendanceScreen() {
           },
         });
 
-        if (!response.ok) {
-          throw new Error('API server returned error code');
+        if (response.ok) {
+          const resJson = await response.json();
+          const list = resJson.data || resJson;
+          setRecords(Array.isArray(list) ? list : []);
+        } else {
+          setRecords([]);
         }
-
-        const data = await response.json();
-        setRecords(data);
       } catch (err) {
-        console.log('API call failed, falling back to mock attendance:', err.message);
-        
-        setRecords([
-          {
-            id: 1,
-            student_id: 1,
-            class_name: 'Grade 5A',
-            attendance_date: '2026-08-28',
-            status: 'present',
-            remarks: 'On time and active',
-            recorded_by_name: 'Sarah Connor',
-          },
-          {
-            id: 2,
-            student_id: 1,
-            class_name: 'Grade 5A',
-            attendance_date: '2026-08-27',
-            status: 'present',
-            remarks: 'Participated in group discussion',
-            recorded_by_name: 'Sarah Connor',
-          },
-          {
-            id: 3,
-            student_id: 1,
-            class_name: 'Grade 5A',
-            attendance_date: '2026-08-26',
-            status: 'late',
-            remarks: 'Arrived 15 minutes late',
-            recorded_by_name: 'Sarah Connor',
-          }
-        ]);
+        console.log('API call failed fetching attendance:', err.message);
+        setRecords([]);
       } finally {
         setLoading(false);
       }
     };
 
     fetchAttendance();
-  }, [token]);
+  }, [selectedStudent, token]);
 
   const getStatusColor = (status) => {
-    switch (status) {
+    switch (status?.toLowerCase()) {
       case 'present':
         return '#34C759';
       case 'late':
@@ -87,7 +87,7 @@ export default function AttendanceScreen() {
   };
 
   const getStatusIcon = (status) => {
-    switch (status) {
+    switch (status?.toLowerCase()) {
       case 'present':
         return 'checkmark.circle.fill';
       case 'late':
@@ -99,10 +99,10 @@ export default function AttendanceScreen() {
     }
   };
 
-  if (loading) {
+  if (loading && !selectedStudent) {
     return (
       <ThemedView style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#208AEF" />
+        <ActivityIndicator size="large" color="#14B8A6" />
       </ThemedView>
     );
   }
@@ -111,22 +111,58 @@ export default function AttendanceScreen() {
     <ThemedView style={[styles.container, { backgroundColor: theme.background }]}>
       <FlatList
         data={records}
-        keyExtractor={(item) => item.id.toString()}
+        keyExtractor={(item) => (item.id || Math.random()).toString()}
         contentContainerStyle={styles.listContent}
         ListHeaderComponent={
           <View style={styles.header}>
-            <ThemedText type="subtitle">Jimmy Doe's Attendance Log</ThemedText>
+            {/* Multi-Child Selector Chips */}
+            {students.length > 1 && (
+              <View style={styles.childChipsRow}>
+                {students.map((child) => {
+                  const isSelected = selectedStudent?.id === child.id;
+                  return (
+                    <TouchableOpacity
+                      key={child.id}
+                      onPress={() => setSelectedStudent(child)}
+                      style={[
+                        styles.childChip,
+                        { backgroundColor: isSelected ? '#14B8A6' : theme.backgroundElement }
+                      ]}
+                    >
+                      <ThemedText style={{ color: isSelected ? '#ffffff' : theme.text, fontWeight: 'bold', fontSize: 12 }}>
+                        {child.full_name}
+                      </ThemedText>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            )}
+
+            <ThemedText type="subtitle">
+              {selectedStudent ? `${selectedStudent.full_name}'s Attendance Log` : 'Child Attendance Log'}
+            </ThemedText>
             <ThemedText type="small" themeColor="textSecondary">
-              Check daily school registration logs. Confirm attendance status and review teacher remarks.
+              Check daily school roll-call logs, arrival status, and teacher remarks.
             </ThemedText>
           </View>
+        }
+        ListEmptyComponent={
+          !loading && (
+            <ThemedView type="backgroundElement" style={styles.emptyCard}>
+              <SymbolView tintColor={theme.textSecondary} name="calendar.badge.clock" size={36} />
+              <ThemedText type="smallBold" style={{ marginTop: 8 }}>No Attendance Records</ThemedText>
+              <ThemedText type="small" themeColor="textSecondary" style={{ textAlign: 'center' }}>
+                {selectedStudent ? `No daily attendance logs recorded yet for ${selectedStudent.full_name}.` : 'No child linked to account.'}
+              </ThemedText>
+            </ThemedView>
+          )
         }
         renderItem={({ item }) => (
           <ThemedView type="backgroundElement" style={styles.card}>
             <View style={styles.cardHeader}>
               <View style={styles.dateCol}>
                 <ThemedText type="smallBold">{item.attendance_date}</ThemedText>
-                <ThemedText type="small" themeColor="textSecondary">{item.class_name}</ThemedText>
+                <ThemedText type="small" themeColor="textSecondary">{item.class_name || selectedStudent?.class_name}</ThemedText>
               </View>
 
               <View style={styles.statusContainer}>
@@ -145,19 +181,15 @@ export default function AttendanceScreen() {
               </View>
             )}
 
-            <View style={styles.cardFooter}>
-              <ThemedText type="small" themeColor="textSecondary" style={styles.footerText}>
-                Recorded by: {item.recorded_by_name}
-              </ThemedText>
-            </View>
+            {item.recorded_by_name && (
+              <View style={styles.cardFooter}>
+                <ThemedText type="small" themeColor="textSecondary" style={styles.footerText}>
+                  Recorded by: {item.recorded_by_name}
+                </ThemedText>
+              </View>
+            )}
           </ThemedView>
         )}
-        ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <SymbolView tintColor={theme.textSecondary} name="calendar.badge.exclamationmark" size={32} />
-            <ThemedText type="small" themeColor="textSecondary">No attendance logs found.</ThemedText>
-          </View>
-        }
       />
     </ThemedView>
   );
@@ -174,17 +206,32 @@ const styles = StyleSheet.create({
   },
   listContent: {
     padding: Spacing.three,
-    gap: Spacing.three,
+    gap: Spacing.two,
   },
   header: {
     marginBottom: Spacing.two,
     gap: Spacing.half,
   },
+  childChipsRow: {
+    flexDirection: 'row',
+    gap: Spacing.one,
+    marginBottom: Spacing.one,
+  },
+  childChip: {
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.one,
+    borderRadius: 16,
+  },
+  emptyCard: {
+    padding: Spacing.six,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: Spacing.three,
+  },
   card: {
     padding: Spacing.three,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#e2e8f01a',
+    borderRadius: 14,
     gap: Spacing.two,
   },
   cardHeader: {
@@ -193,37 +240,28 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   dateCol: {
-    gap: Spacing.half,
+    gap: 2,
   },
   statusContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.one,
-    backgroundColor: '#0000000d',
-    paddingHorizontal: Spacing.two,
-    paddingVertical: Spacing.half,
-    borderRadius: 8,
+    gap: Spacing.half,
   },
   remarksBox: {
-    backgroundColor: '#00000005',
     padding: Spacing.two,
     borderRadius: 8,
+    backgroundColor: '#00000008',
   },
   remarksText: {
     fontStyle: 'italic',
+    fontSize: 12,
   },
   cardFooter: {
     borderTopWidth: 1,
-    borderTopColor: '#e2e8f010',
+    borderTopColor: '#e2e8f01a',
     paddingTop: Spacing.one,
   },
   footerText: {
-    fontSize: 10,
-  },
-  emptyContainer: {
-    padding: Spacing.six,
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: Spacing.two,
+    fontSize: 11,
   },
 });
