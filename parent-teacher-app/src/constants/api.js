@@ -11,7 +11,7 @@
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 
-const BACKEND_PATH = '/parent-teacher-backend';
+const BACKEND_PATH = '/parent-teacher-backend/api';
 const FALLBACK_IP = '192.168.0.121';
 
 const getApiUrl = () => {

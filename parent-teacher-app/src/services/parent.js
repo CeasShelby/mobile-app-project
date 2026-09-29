@@ -12,7 +12,7 @@ import { apiRequest } from './api';
  * @returns {Promise<{ parent_name: string, students: Array, announcements: Array }>}
  */
 export async function getParentDashboard() {
-  return await apiRequest('/api/parent/dashboard.php', {
+  return await apiRequest('/parent/dashboard.php', {
     method: 'GET',
   });
 }
@@ -24,7 +24,7 @@ export async function getParentDashboard() {
  * @returns {Promise<{ student: Object, homeroom_teacher: Object, guardian: Object, attendance: Object, academic: Object }>}
  */
 export async function getStudentProfile(studentId) {
-  return await apiRequest(`/api/parent/student_profile.php?student_id=${studentId}`, {
+  return await apiRequest(`/parent/student_profile.php?student_id=${studentId}`, {
     method: 'GET',
   });
 }

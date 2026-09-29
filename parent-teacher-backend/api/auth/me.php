@@ -7,6 +7,9 @@
 require_once __DIR__ . '/../../config/database.php';
 require_once __DIR__ . '/../../helpers/response.php';
 require_once __DIR__ . '/../../middleware/auth.php';
+require_once __DIR__ . '/../../models/init_models.php';
+require_once __DIR__ . '/../../helpers/response.php';
+require_once __DIR__ . '/../../middleware/auth.php';
 
 // 1. Enforce authentication middleware
 $authUser = requireAuth();

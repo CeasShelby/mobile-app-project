@@ -13,7 +13,7 @@ import { apiRequest } from './api';
  * @returns {Promise<{ token: string, user: object }>} Token and user profile payload
  */
 export async function loginUser(email, password) {
-  return await apiRequest('/api/auth/login.php', {
+  return await apiRequest('/auth/login.php', {
     method: 'POST',
     body: { email, password },
   });
@@ -25,7 +25,7 @@ export async function loginUser(email, password) {
  * @returns {Promise<object>} User profile object
  */
 export async function fetchUserProfile() {
-  return await apiRequest('/api/auth/me.php', {
+  return await apiRequest('/auth/me.php', {
     method: 'GET',
   });
 }
@@ -38,7 +38,7 @@ export async function fetchUserProfile() {
  * @returns {Promise<object>} Success confirmation message
  */
 export async function changePassword(currentPassword, newPassword) {
-  return await apiRequest('/api/auth/change_password.php', {
+  return await apiRequest('/auth/change_password.php', {
     method: 'POST',
     body: {
       current_password: currentPassword,
@@ -54,7 +54,7 @@ export async function changePassword(currentPassword, newPassword) {
  * @returns {Promise<object>} Updated user profile object
  */
 export async function updateUserProfile(payload) {
-  return await apiRequest('/api/auth/update_profile.php', {
+  return await apiRequest('/auth/update_profile.php', {
     method: 'POST',
     body: payload,
   });

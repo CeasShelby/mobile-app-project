@@ -4,8 +4,11 @@
 // File: parent-teacher-backend/api/health.php
 // ============================================================
 
-require_once __DIR__ . '/../config/database.php';
-require_once __DIR__ . '/../helpers/response.php';
+require_once __DIR__ . '/../../config/database.php';
+require_once __DIR__ . '/../../helpers/response.php';
+require_once __DIR__ . '/../../middleware/auth.php';
+require_once __DIR__ . '/../../models/init_models.php';
+require_once __DIR__ . '/../../helpers/response.php';
 
 try {
     // Perform a test database query to confirm connection health
