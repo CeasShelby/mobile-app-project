@@ -91,6 +91,6 @@ try {
         "user"  => $user
     ], "Login successful. Welcome back!");
 
-} catch (Exception $e) {
+} catch (\Throwable $e) {
     sendError("Login processing error: " . $e->getMessage(), null, 500);
 }
