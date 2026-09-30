@@ -14,7 +14,7 @@
  * @return array List of academic progress records
  */
 function getStudentProgress($pdo, $studentId, $subjectId = null) {
-    // Dynamic column checks for student_progress table
+    // Dynamic column checks for student_progress table compatibility
     $marksCheck = $pdo->query("SHOW COLUMNS FROM `student_progress` LIKE 'marks_obtained'")->fetch();
     $marksCol = $marksCheck ? "sp.marks_obtained as marks" : "sp.marks";
 
@@ -22,7 +22,10 @@ function getStudentProgress($pdo, $studentId, $subjectId = null) {
     $totalMarksCol = $totalMarksCheck ? "sp.total_marks as max_marks" : "100.00 as max_marks";
 
     $titleCheck = $pdo->query("SHOW COLUMNS FROM `student_progress` LIKE 'assessment_name'")->fetch();
-    $titleCol = $titleCheck ? "sp.assessment_name as assessment_title" : "sp.assessment_title";
+    $titleCol = $titleCheck ? "sp.assessment_name as assessment_title" : "IFNULL(a.title, 'Subject Evaluation') as assessment_title";
+
+    $typeCheck = $pdo->query("SHOW COLUMNS FROM `student_progress` LIKE 'assessment_type'")->fetch();
+    $typeCol = $typeCheck ? "sp.assessment_type" : "IFNULL(a.assessment_type, 'quiz') as assessment_type";
 
     $dateCheck = $pdo->query("SHOW COLUMNS FROM `student_progress` LIKE 'assessment_date'")->fetch();
     $dateSelect = $dateCheck ? "sp.assessment_date as date_recorded" : "sp.date_recorded";
@@ -42,9 +45,10 @@ function getStudentProgress($pdo, $studentId, $subjectId = null) {
             sub.subject_name,
             sub.subject_code,
             {$titleCol},
-            sp.assessment_type
+            {$typeCol}
         FROM student_progress sp
         JOIN subjects sub ON sp.subject_id = sub.id
+        LEFT JOIN assessments a ON sp.assessment_id = a.id
         WHERE sp.student_id = ?
     ";
 
@@ -120,19 +124,46 @@ function getStudentAcademicSummary($pdo, $studentId) {
  * @return int Newly created progress record ID
  */
 function recordStudentProgress($pdo, $studentId, $subjectId, $marks, $grade, $comments = null, $recordedBy = null, $assessmentName = 'Subject Assessment', $assessmentType = 'quiz') {
-    $stmt = $pdo->prepare("
-        INSERT INTO student_progress (student_id, subject_id, marks_obtained, grade, remarks, teacher_id, assessment_name, assessment_type, assessment_date) 
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURDATE())
-    ");
-    $stmt->execute([
-        (int)$studentId,
-        (int)$subjectId,
-        (float)$marks,
-        strtoupper(trim($grade)),
-        $comments,
-        $recordedBy ? (int)$recordedBy : null,
-        $assessmentName,
-        $assessmentType
-    ]);
+    $hasMarksObtained = (bool)$pdo->query("SHOW COLUMNS FROM `student_progress` LIKE 'marks_obtained'")->fetch();
+    $marksField = $hasMarksObtained ? 'marks_obtained' : 'marks';
+
+    $hasRemarks = (bool)$pdo->query("SHOW COLUMNS FROM `student_progress` LIKE 'remarks'")->fetch();
+    $remarksField = $hasRemarks ? 'remarks' : 'comments';
+
+    $hasTeacherId = (bool)$pdo->query("SHOW COLUMNS FROM `student_progress` LIKE 'teacher_id'")->fetch();
+    $teacherField = $hasTeacherId ? 'teacher_id' : 'recorded_by';
+
+    $hasAssessmentName = (bool)$pdo->query("SHOW COLUMNS FROM `student_progress` LIKE 'assessment_name'")->fetch();
+    
+    if ($hasAssessmentName) {
+        $stmt = $pdo->prepare("
+            INSERT INTO student_progress (student_id, subject_id, {$marksField}, grade, {$remarksField}, {$teacherField}, assessment_name, assessment_type, assessment_date) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURDATE())
+        ");
+        $stmt->execute([
+            (int)$studentId,
+            (int)$subjectId,
+            (float)$marks,
+            strtoupper(trim($grade)),
+            $comments,
+            $recordedBy ? (int)$recordedBy : null,
+            $assessmentName,
+            $assessmentType
+        ]);
+    } else {
+        $stmt = $pdo->prepare("
+            INSERT INTO student_progress (student_id, subject_id, {$marksField}, grade, {$remarksField}, {$teacherField}, date_recorded) 
+            VALUES (?, ?, ?, ?, ?, ?, CURDATE())
+        ");
+        $stmt->execute([
+            (int)$studentId,
+            (int)$subjectId,
+            (float)$marks,
+            strtoupper(trim($grade)),
+            $comments,
+            $recordedBy ? (int)$recordedBy : null
+        ]);
+    }
+
     return (int)$pdo->lastInsertId();
 }
