@@ -14,7 +14,14 @@ import { Platform } from 'react-native';
 const BACKEND_PATH = '/parent-teacher-backend/api';
 const FALLBACK_IP = '192.168.0.121';
 
+// Set this to your live Render backend URL once deployed (e.g., 'https://parent-teacher-backend.onrender.com/api')
+export const RENDER_API_URL = null; 
+
 const getApiUrl = () => {
+  // 1. If Render production URL is specified, use it for global access
+  if (RENDER_API_URL) {
+    return RENDER_API_URL;
+  }
   // Web browser on the same PC — use localhost
   if (Platform.OS === 'web') {
     if (typeof window !== 'undefined') {

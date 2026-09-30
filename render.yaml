@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: parent-teacher-backend
+    env: docker
+    dockerContext: ./parent-teacher-backend
+    dockerfilePath: ./parent-teacher-backend/Dockerfile
+    region: singapore
+    plan: free
+    envVars:
+      - key: DB_HOST
+        sync: false
+      - key: DB_NAME
+        sync: false
+      - key: DB_USER
+        sync: false
+      - key: DB_PASS
+        sync: false
+      - key: DB_PORT
+        value: "3306"
