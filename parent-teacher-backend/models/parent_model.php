@@ -55,7 +55,8 @@ function getOrCreateParentId($pdo, $userId, $occupation = null, $address = null,
  * @param int $parentId Parent table primary key ID
  * @return array List of linked student records with class details
  */
-function getLinkedStudentsForParent($pdo, $parentId) {
+if (!function_exists('getLinkedStudentsForParent')) {
+    function getLinkedStudentsForParent($pdo, $parentId) {
     // Dynamic admission_number handling
     $hasAdmCol = false;
     try {
@@ -87,6 +88,7 @@ function getLinkedStudentsForParent($pdo, $parentId) {
     ");
     $stmt->execute([(int)$parentId]);
     return $stmt->fetchAll();
+    }
 }
 
 /**

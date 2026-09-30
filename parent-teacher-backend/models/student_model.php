@@ -23,22 +23,24 @@
  * WHAT: Relational SQL JOIN linking students, parent_students, and classes.
  * HOW: Filters by ps.parent_id = ? and returns array of linked child records.
  */
-function getLinkedStudentsForParent($pdo, $parentId) {
-    // 1. HOW: Prepare multi-table SQL JOIN query
-    $stmt = $pdo->prepare("
-        SELECT 
-            s.id, s.admission_number, s.full_name, s.class_id, s.status,
-            c.class_name, c.grade_level, ps.relationship_type
-        FROM students s
-        JOIN parent_students ps ON s.id = ps.student_id
-        LEFT JOIN classes c ON s.class_id = c.id
-        WHERE ps.parent_id = ? AND (s.status = 'active' OR s.status IS NULL)
-        ORDER BY s.full_name ASC
-    ");
-    // 2. HOW: Bind parent ID safely and execute
-    $stmt->execute([(int)$parentId]);
-    // 3. WHAT: Return array of linked student records
-    return $stmt->fetchAll();
+if (!function_exists('getLinkedStudentsForParent')) {
+    function getLinkedStudentsForParent($pdo, $parentId) {
+        // 1. HOW: Prepare multi-table SQL JOIN query
+        $stmt = $pdo->prepare("
+            SELECT 
+                s.id, s.admission_number, s.full_name, s.class_id, s.status,
+                c.class_name, c.grade_level, ps.relationship_type
+            FROM students s
+            JOIN parent_students ps ON s.id = ps.student_id
+            LEFT JOIN classes c ON s.class_id = c.id
+            WHERE ps.parent_id = ? AND (s.status = 'active' OR s.status IS NULL)
+            ORDER BY s.full_name ASC
+        ");
+        // 2. HOW: Bind parent ID safely and execute
+        $stmt->execute([(int)$parentId]);
+        // 3. WHAT: Return array of linked student records
+        return $stmt->fetchAll();
+    }
 }
 
 /**
