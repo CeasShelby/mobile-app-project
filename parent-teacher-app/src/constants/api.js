@@ -15,7 +15,7 @@ const BACKEND_PATH = '/parent-teacher-backend/api';
 const FALLBACK_IP = '192.168.0.121';
 
 // Set this to your live Render backend URL once deployed (e.g., 'https://parent-teacher-backend.onrender.com/api')
-export const RENDER_API_URL = null; 
+export const RENDER_API_URL = 'https://mobile-app-project-i4su.onrender.com/api'; 
 
 const getApiUrl = () => {
   // 1. If Render production URL is specified, use it for global access
