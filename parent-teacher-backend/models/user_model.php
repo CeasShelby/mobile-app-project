@@ -23,13 +23,15 @@
  * WHAT: Dynamically checks database table metadata via SHOW COLUMNS.
  * HOW: Returns column alias string to embed safely inside SELECT queries.
  */
+// Define helper function 'getUserPhoneSelect' accepting database connection object ($pdo)
 function getUserPhoneSelect($pdo) {
     try {
-        // WHAT: Queries database column metadata for `users` table
+        // Line 1: Execute SHOW COLUMNS SQL query to check if 'phone_number' column exists in 'users' table
         $check = $pdo->query("SHOW COLUMNS FROM `users` LIKE 'phone_number'")->fetch();
-        // HOW: Returns exact column name or alias
+        // Line 2: Return 'phone_number' if column exists, otherwise return SQL alias 'phone as phone_number'
         return $check ? "phone_number" : "phone as phone_number";
     } catch (Exception $e) {
+        // If an exception occurs, fallback safely to alias string
         return "phone as phone_number";
     }
 }
@@ -41,18 +43,22 @@ function getUserPhoneSelect($pdo) {
  * WHAT: Executes a prepared SELECT query filtering by primary key `id`.
  * HOW: $stmt->execute([(int)$userId]) binds integer ID safely to `?` placeholder.
  */
+// Define function named 'findUserById' accepting database object ($pdo) and integer user ID ($userId)
 function findUserById($pdo, $userId) {
-    // 1. WHAT: Resolve phone column name dynamically
+    // Line 1: Get appropriate phone column SQL fragment from helper function
     $phoneCol = getUserPhoneSelect($pdo);
-    // 2. HOW: Prepare SQL query with parameter binding to prevent SQL injection
+
+    // Line 2: Prepare SQL SELECT query targeting 'users' table matching primary key 'id'
     $stmt = $pdo->prepare("
         SELECT id, email, full_name, {$phoneCol}, role, status, profile_picture, created_at, updated_at 
         FROM users 
         WHERE id = ?
     ");
-    // 3. HOW: Execute query safely by passing bound parameters array
+
+    // Line 3: Cast $userId to integer for safety, bind to placeholder '?', and execute query on MySQL
     $stmt->execute([(int)$userId]);
-    // 4. WHAT: Returns associative array row or false if user does not exist
+
+    // Line 4: Fetch and return single matching user row as an associative array (or false if user doesn't exist)
     return $stmt->fetch();
 }
 
@@ -63,17 +69,22 @@ function findUserById($pdo, $userId) {
  * WHAT: Retrieves full user record including encrypted password hash.
  * HOW: $stmt->fetch() returns user array which is evaluated by password_verify().
  */
+// Define function named 'findUserByEmail' accepting database object ($pdo) and email string ($email)
 function findUserByEmail($pdo, $email) {
+    // Line 1: Resolve phone column name dynamically
     $phoneCol = getUserPhoneSelect($pdo);
-    // 1. HOW: Prepare SQL query with placeholder `?`
+
+    // Line 2: Prepare SQL SELECT query selecting user details INCLUDING password hash for verification
     $stmt = $pdo->prepare("
         SELECT id, email, password, full_name, {$phoneCol}, role, status, profile_picture, created_at, updated_at 
         FROM users 
         WHERE email = ?
     ");
-    // 2. HOW: Trim email whitespace and execute safely
+
+    // Line 3: Strip surrounding whitespace from email string using trim(), bind to placeholder '?', and execute
     $stmt->execute([trim($email)]);
-    // 3. WHAT: Return matching user associative array row
+
+    // Line 4: Fetch and return matching user row as associative array (or false if email not found)
     return $stmt->fetch();
 }
 
@@ -84,17 +95,20 @@ function findUserByEmail($pdo, $email) {
  * WHAT: Inserts full name, email, encrypted password, role, and phone number.
  * HOW: $pdo->lastInsertId() returns newly generated primary key integer ID.
  */
+// Define function named 'createUser' accepting user registration details
 function createUser($pdo, $fullName, $email, $hashedPassword, $role, $phoneNumber = null) {
-    // 1. WHAT: Check phone column schema name
+    // Line 1: Check whether phone or phone_number column exists in 'users' table
     $phoneCheck = $pdo->query("SHOW COLUMNS FROM `users` LIKE 'phone_number'")->fetch();
+    // Line 2: Store column name string ('phone_number' or 'phone') in variable $colName
     $colName = $phoneCheck ? "phone_number" : "phone";
 
-    // 2. HOW: Prepare SQL INSERT statement with default status 'active'
+    // Line 3: Prepare SQL INSERT query template with default account status 'active'
     $stmt = $pdo->prepare("
         INSERT INTO users (full_name, email, password, role, {$colName}, status) 
         VALUES (?, ?, ?, ?, ?, 'active')
     ");
-    // 3. HOW: Execute insertion with bound parameters
+
+    // Line 4: Execute query with array of parameter values (trimming name and email)
     $stmt->execute([
         trim($fullName),
         trim($email),
@@ -102,7 +116,8 @@ function createUser($pdo, $fullName, $email, $hashedPassword, $role, $phoneNumbe
         $role,
         $phoneNumber
     ]);
-    // 4. WHAT: Return newly generated user ID integer
+
+    // Line 5: Retrieve and return newly generated auto-increment primary key ID as integer
     return (int)$pdo->lastInsertId();
 }
 
@@ -113,8 +128,11 @@ function createUser($pdo, $fullName, $email, $hashedPassword, $role, $phoneNumbe
  * WHAT: Updates encrypted password hash for target user ID.
  * HOW: $stmt->execute() returns boolean true on successful update.
  */
+// Define function named 'updateUserPassword' accepting database object, user ID, and new BCrypt password hash
 function updateUserPassword($pdo, $userId, $newHashedPassword) {
+    // Line 1: Prepare SQL UPDATE query to change password column where user ID matches
     $stmt = $pdo->prepare("UPDATE users SET password = ? WHERE id = ?");
+    // Line 2: Execute query passing new password hash and integer-casted user ID; returns boolean true/false
     return $stmt->execute([$newHashedPassword, (int)$userId]);
 }
 
@@ -125,15 +143,21 @@ function updateUserPassword($pdo, $userId, $newHashedPassword) {
  * WHAT: Updates full_name, phone, and optional profile_picture.
  * HOW: Uses COALESCE(?, profile_picture) to preserve existing picture if null passed.
  */
+// Define function named 'updateUserProfile' accepting updated user profile fields
 function updateUserProfile($pdo, $userId, $fullName, $phoneNumber = null, $profilePicture = null) {
+    // Line 1: Check phone column schema name
     $phoneCheck = $pdo->query("SHOW COLUMNS FROM `users` LIKE 'phone_number'")->fetch();
     $colName = $phoneCheck ? "phone_number" : "phone";
 
+    // Line 2: Prepare SQL UPDATE query template
+    // COALESCE(?, profile_picture) -> If null is passed for profilePicture, keep existing image URL intact
     $stmt = $pdo->prepare("
         UPDATE users 
         SET full_name = ?, {$colName} = ?, profile_picture = COALESCE(?, profile_picture) 
         WHERE id = ?
     ");
+
+    // Line 3: Execute query with bound parameter values; returns boolean true on success
     return $stmt->execute([trim($fullName), $phoneNumber, $profilePicture, (int)$userId]);
 }
 
@@ -144,7 +168,10 @@ function updateUserProfile($pdo, $userId, $fullName, $phoneNumber = null, $profi
  * WHAT: Updates status column in users table.
  * HOW: $stmt->execute([$status, (int)$userId]) updates target record.
  */
+// Define function named 'updateUserStatus' accepting database connection, user ID, and target status string
 function updateUserStatus($pdo, $userId, $status) {
+    // Line 1: Prepare SQL UPDATE statement setting status column where id matches
     $stmt = $pdo->prepare("UPDATE users SET status = ? WHERE id = ?");
+    // Line 2: Execute statement with status string and integer user ID
     return $stmt->execute([$status, (int)$userId]);
 }
