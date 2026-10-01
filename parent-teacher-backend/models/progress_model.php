@@ -34,21 +34,28 @@ function getStudentProgress($pdo, $studentId, $subjectId = null) {
     $remarksCheck = $pdo->query("SHOW COLUMNS FROM `student_progress` LIKE 'remarks'")->fetch();
     $remarksCol = $remarksCheck ? "sp.remarks as comments" : "sp.comments";
 
-    // Check if assessments table exists in this database before joining
-    // This prevents crashes on local databases that may be missing the table
+    // Check if assessments table exists AND if student_progress has assessment_id column
+    // Both must be true to safely JOIN — local DBs may have one without the other
     $assessmentsExists = false;
+    $hasAssessmentIdCol = false;
     try {
         $checkStmt = $pdo->query("SELECT 1 FROM assessments LIMIT 0");
         $assessmentsExists = ($checkStmt !== false);
     } catch (\Exception $e) {
         $assessmentsExists = false;
     }
+    if ($assessmentsExists) {
+        $colCheck = $pdo->query("SHOW COLUMNS FROM `student_progress` LIKE 'assessment_id'")->fetch();
+        $hasAssessmentIdCol = (bool)$colCheck;
+    }
 
-    // If assessments table doesn't exist, use safe fallback values
-    $assessmentJoin = $assessmentsExists ? "LEFT JOIN assessments a ON sp.assessment_id = a.id" : "";
-    if (!$assessmentsExists) {
-        $titleCol   = "IFNULL(sp.comments, 'Subject Evaluation') as assessment_title";
-        $typeCol    = "'quiz' as assessment_type";
+    // Only JOIN assessments if BOTH the table exists AND the FK column exists
+    $canJoinAssessments = $assessmentsExists && $hasAssessmentIdCol;
+    $assessmentJoin = $canJoinAssessments ? "LEFT JOIN assessments a ON sp.assessment_id = a.id" : "";
+    if (!$canJoinAssessments) {
+        // Use assessment_name column directly from student_progress (exists in local DB)
+        $titleCol = "IFNULL(sp.assessment_name, 'Subject Evaluation') as assessment_title";
+        $typeCol  = "IFNULL(sp.assessment_type, 'quiz') as assessment_type";
     }
 
     $sql = "
