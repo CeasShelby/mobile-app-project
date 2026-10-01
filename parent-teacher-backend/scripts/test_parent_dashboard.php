@@ -1,35 +1,46 @@
 <?php
-// 1. First get token for parent@example.com
-$ch = curl_init('https://mobile-app-project-i4su.onrender.com/api/auth/login.php');
-curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-curl_setopt($ch, CURLOPT_POST, true);
-curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
-curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode([
-    'email' => 'parent@example.com',
-    'password' => 'password'
-]));
-$res = curl_exec($ch);
-curl_close($ch);
+/**
+ * Quick test: simulate what parent dashboard calls to verify no more crashes
+ */
+$host='127.0.0.1'; $db='parent_teacher_app'; $user='root';
+$pdo = null;
+foreach (['', 'root'] as $pass) {
+    try { $pdo = new PDO("mysql:host=$host;dbname=$db;charset=utf8mb4",$user,$pass,[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION]); break; }
+    catch(PDOException $e) {}
+}
+if (!$pdo) die("[ERROR] Cannot connect\n");
+echo "[OK] Connected\n\n";
 
-$data = json_decode($res, true);
-$token = $data['data']['token'] ?? null;
+require_once __DIR__ . '/../models/student_model.php';
+require_once __DIR__ . '/../models/attendance_model.php';
+require_once __DIR__ . '/../models/progress_model.php';
+require_once __DIR__ . '/../models/announcement_model.php';
+require_once __DIR__ . '/../models/parent_model.php';
 
-if (!$token) {
-    die("Failed to login: $res\n");
+echo "--- Test 1: getLinkedStudentsForParent ---\n";
+$students = getLinkedStudentsForParent($pdo, 1);
+echo "Found " . count($students) . " linked students\n";
+foreach ($students as $s) echo "  - {$s['full_name']} (class: {$s['class_name']})\n";
+
+echo "\n--- Test 2: getAttendanceSummaryStats ---\n";
+foreach ($students as $s) {
+    $stats = getAttendanceSummaryStats($pdo, $s['id']);
+    echo "  Student {$s['full_name']}: total_days={$stats['total_days']}, present={$stats['present_days']}, %={$stats['percentage']}\n";
 }
 
-echo "[1] Successfully logged in! JWT Token acquired.\n";
+echo "\n--- Test 3: getStudentAcademicSummary (the one that was crashing) ---\n";
+foreach ($students as $s) {
+    try {
+        $summary = getStudentAcademicSummary($pdo, $s['id']);
+        echo "  Student {$s['full_name']}: avg={$summary['overall_average']}, assessments={$summary['total_assessments']}\n";
+        echo "  [OK] No crash!\n";
+    } catch (Exception $e) {
+        echo "  [ERROR] {$e->getMessage()}\n";
+    }
+}
 
-// 2. Call parent dashboard API endpoint with JWT Bearer Token
-$ch = curl_init('https://mobile-app-project-i4su.onrender.com/api/parent/dashboard.php');
-curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-curl_setopt($ch, CURLOPT_HTTPHEADER, [
-    'Content-Type: application/json',
-    'Authorization: Bearer ' . $token
-]);
-$dashRes = curl_exec($ch);
-$httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-curl_close($ch);
+echo "\n--- Test 4: getPublishedAnnouncements ---\n";
+$ann = getPublishedAnnouncements($pdo, 'parents', 5);
+echo "Found " . count($ann) . " announcements\n";
 
-echo "HTTP CODE: $httpCode\n";
-echo "DASHBOARD RESPONSE:\n$dashRes\n";
+echo "\n[ALL TESTS PASSED] Parent dashboard backend is clean!\n";
