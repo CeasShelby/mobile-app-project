@@ -81,7 +81,7 @@ function recordAttendance($pdo, $studentId, $classId, $date, $status, $recordedB
     // Line 1: Prepare SQL INSERT query template
     // ON DUPLICATE KEY UPDATE -> If a record for this (student_id, date) already exists, update its status instead of crashing
     $stmt = $pdo->prepare("
-        INSERT INTO attendance (student_id, class_id, date, status, recorded_by)
+        INSERT INTO attendance (student_id, class_id, attendance_date, status, recorded_by)
         VALUES (?, ?, ?, ?, ?)
         ON DUPLICATE KEY UPDATE status = VALUES(status), recorded_by = VALUES(recorded_by)
     ");
@@ -112,7 +112,7 @@ function recordAttendance($pdo, $studentId, $classId, $date, $status, $recordedB
 function getStudentAttendanceHistory($pdo, $studentId, $startDate = null, $endDate = null) {
 
     // Line 1: Initialize base SQL query string variable named $sql with WHERE student_id = ?
-    $sql = "SELECT id, date, status, remark FROM attendance WHERE student_id = ?";
+    $sql = "SELECT id, attendance_date, status, remarks FROM attendance WHERE student_id = ?";
 
     // Line 2: Initialize parameters array named $params with integer-casted $studentId
     $params = [(int)$studentId];
@@ -120,7 +120,7 @@ function getStudentAttendanceHistory($pdo, $studentId, $startDate = null, $endDa
     // Line 3: Check IF a $startDate filter was provided by caller
     if ($startDate) {
         // Line 4: Append " AND date >= ?" string to our SQL query
-        $sql .= " AND date >= ?";
+        $sql .= " AND attendance_date >= ?";
         // Line 5: Push $startDate value into $params array
         $params[] = $startDate;
     }
@@ -128,13 +128,13 @@ function getStudentAttendanceHistory($pdo, $studentId, $startDate = null, $endDa
     // Line 6: Check IF an $endDate filter was provided by caller
     if ($endDate) {
         // Line 7: Append " AND date <= ?" string to our SQL query
-        $sql .= " AND date <= ?";
+        $sql .= " AND attendance_date <= ?";
         // Line 8: Push $endDate value into $params array
         $params[] = $endDate;
     }
 
     // Line 9: Append ORDER BY clause to sort history with most recent dates at the top
-    $sql .= " ORDER BY date DESC";
+    $sql .= " ORDER BY attendance_date DESC";
 
     // Line 10: Prepare final dynamically constructed SQL query on database server
     $stmt = $pdo->prepare($sql);
@@ -143,5 +143,35 @@ function getStudentAttendanceHistory($pdo, $studentId, $startDate = null, $endDa
     $stmt->execute($params);
 
     // Line 12: Fetch and return ALL matching attendance log rows as an associative array
+    return $stmt->fetchAll();
+}
+
+/**
+ * Alias for getStudentAttendanceHistory — used by student_profile.php
+ * Fetches attendance records for a student with optional limit.
+ *
+ * @param PDO $pdo Active database connection
+ * @param int $studentId Student primary key ID
+ * @param int $limit Maximum number of records to return
+ * @return array Attendance log records
+ */
+function getAttendanceByStudent($pdo, $studentId, $limit = 50) {
+    $limit = max(1, (int)$limit); // safe integer cast
+    $stmt = $pdo->prepare("
+        SELECT
+            a.id,
+            a.attendance_date,
+            a.status,
+            a.remarks,
+            a.class_id,
+            COALESCE(u.full_name, 'System') as recorded_by_name
+        FROM attendance a
+        LEFT JOIN teachers t ON a.recorded_by = t.id
+        LEFT JOIN users u ON t.user_id = u.id
+        WHERE a.student_id = ?
+        ORDER BY a.attendance_date DESC
+        LIMIT $limit
+    ");
+    $stmt->execute([(int)$studentId]);
     return $stmt->fetchAll();
 }
