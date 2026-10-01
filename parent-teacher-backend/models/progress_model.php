@@ -34,6 +34,23 @@ function getStudentProgress($pdo, $studentId, $subjectId = null) {
     $remarksCheck = $pdo->query("SHOW COLUMNS FROM `student_progress` LIKE 'remarks'")->fetch();
     $remarksCol = $remarksCheck ? "sp.remarks as comments" : "sp.comments";
 
+    // Check if assessments table exists in this database before joining
+    // This prevents crashes on local databases that may be missing the table
+    $assessmentsExists = false;
+    try {
+        $checkStmt = $pdo->query("SELECT 1 FROM assessments LIMIT 0");
+        $assessmentsExists = ($checkStmt !== false);
+    } catch (\Exception $e) {
+        $assessmentsExists = false;
+    }
+
+    // If assessments table doesn't exist, use safe fallback values
+    $assessmentJoin = $assessmentsExists ? "LEFT JOIN assessments a ON sp.assessment_id = a.id" : "";
+    if (!$assessmentsExists) {
+        $titleCol   = "IFNULL(sp.comments, 'Subject Evaluation') as assessment_title";
+        $typeCol    = "'quiz' as assessment_type";
+    }
+
     $sql = "
         SELECT 
             sp.id,
@@ -48,7 +65,7 @@ function getStudentProgress($pdo, $studentId, $subjectId = null) {
             {$typeCol}
         FROM student_progress sp
         JOIN subjects sub ON sp.subject_id = sub.id
-        LEFT JOIN assessments a ON sp.assessment_id = a.id
+        {$assessmentJoin}
         WHERE sp.student_id = ?
     ";
 

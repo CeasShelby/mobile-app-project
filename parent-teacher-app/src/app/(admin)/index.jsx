@@ -104,12 +104,20 @@ export default function AdminDashboard() {
     }
   };
 
-  // Re-fetch every time this screen comes into focus AND whenever token changes
+  // Re-fetch every time this screen comes into focus
   useFocusEffect(
     useCallback(() => {
       fetchOverview();
     }, [token])
   );
+
+  // ALSO watch token separately: if token was null on first mount but loaded after,
+  // this useEffect triggers a re-fetch automatically without requiring screen re-focus
+  useEffect(() => {
+    if (token) {
+      fetchOverview();
+    }
+  }, [token]);
 
   const handleDeleteClass = (classObj) => {
     Alert.alert(
