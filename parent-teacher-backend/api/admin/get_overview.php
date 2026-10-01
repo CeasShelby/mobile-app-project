@@ -6,6 +6,7 @@
 // ============================================================
 
 require_once __DIR__ . '/../../config/database.php';
+require_once __DIR__ . '/../../auth_middleware.php';
 require_once __DIR__ . '/../../helpers/response.php';
 require_once __DIR__ . '/../../middleware/auth.php';
 require_once __DIR__ . '/../../models/init_models.php';
@@ -26,7 +27,7 @@ try {
     $stmt = $pdo->query("
         SELECT
             (SELECT COUNT(*) FROM classes)                          AS total_classes,
-            (SELECT COUNT(*) FROM students WHERE status = 'active') AS total_students,
+            (SELECT COUNT(*) FROM students WHERE status = 'active' OR status IS NULL OR status != 'inactive') AS total_students,
             (SELECT COUNT(*) FROM teachers)                         AS total_teachers,
             (SELECT COUNT(*) FROM parents)                          AS total_parents,
             (SELECT COUNT(*) FROM users WHERE role = 'admin')       AS total_staff

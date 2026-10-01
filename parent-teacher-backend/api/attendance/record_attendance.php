@@ -1,6 +1,7 @@
 <?php
 // Include database configuration and token validation middleware from parent directory
 require_once __DIR__ . '/../../config/database.php';
+require_once __DIR__ . '/../../auth_middleware.php';
 require_once __DIR__ . '/../../helpers/response.php';
 require_once __DIR__ . '/../../middleware/auth.php';
 require_once __DIR__ . '/../../models/init_models.php';

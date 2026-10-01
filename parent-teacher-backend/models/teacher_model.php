@@ -118,12 +118,31 @@ function getHomeroomTeacherForClass($pdo, $classId) {
  * @return array List of assigned classes
  */
 function getTeacherAssignedClasses($pdo, $teacherId) {
-    $stmt = $pdo->prepare("
-        SELECT c.* 
-        FROM classes c
-        WHERE c.teacher_id = ?
-        ORDER BY c.class_name ASC
-    ");
-    $stmt->execute([(int)$teacherId]);
-    return $stmt->fetchAll();
+    try {
+        $stmt = $pdo->prepare("
+            SELECT DISTINCT c.* 
+            FROM classes c
+            JOIN teacher_classes tc ON c.id = tc.class_id
+            WHERE tc.teacher_id = ?
+            ORDER BY c.class_name ASC
+        ");
+        $stmt->execute([(int)$teacherId]);
+        $classes = $stmt->fetchAll();
+        if (!empty($classes)) {
+            return $classes;
+        }
+    } catch (Exception $e) {}
+
+    try {
+        $stmt = $pdo->prepare("
+            SELECT c.* 
+            FROM classes c
+            WHERE c.teacher_id = ?
+            ORDER BY c.class_name ASC
+        ");
+        $stmt->execute([(int)$teacherId]);
+        return $stmt->fetchAll();
+    } catch (Exception $e) {
+        return [];
+    }
 }

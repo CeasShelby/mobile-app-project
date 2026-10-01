@@ -1,60 +1,46 @@
 // ============================================================
-// API Base URL Configuration
+// API Base URL Configuration — LOCAL XAMPP ONLY
 // File: parent-teacher-app/src/constants/api.js
 //
-// XAMPP Apache Server serves the PHP backend at:
-//   http://<your-machine-ip>/parent-teacher-backend
-//
-// Your machine's LAN Wi-Fi IP: 192.168.0.115
+// This app connects ONLY to your local XAMPP Apache server.
+// XAMPP must be running on your PC with Apache + MySQL ON.
 // ============================================================
 
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 
 const BACKEND_PATH = '/parent-teacher-backend/api';
-const FALLBACK_IP = '192.168.0.121';
-
-// Set this to your live Render backend URL once deployed (e.g., 'https://parent-teacher-backend.onrender.com/api')
-export const RENDER_API_URL = null; 
 
 const getApiUrl = () => {
-  // 1. If Render production URL is specified, use it for global access
-  if (RENDER_API_URL) {
-    return RENDER_API_URL;
-  }
-  // Web browser on the same PC — use localhost
+  // On web browser (PC), use localhost directly
   if (Platform.OS === 'web') {
-    if (typeof window !== 'undefined') {
-      return `http://${window.location.hostname}${BACKEND_PATH}`;
-    }
     return `http://localhost${BACKEND_PATH}`;
   }
 
-  // Mobile (Expo Go on phone):
-  // Dynamically detect PC's current IP address from Expo's Metro bundler connection
+  // On mobile (Expo Go on phone):
+  // Reads your PC's current IP from Metro bundler automatically
   const hostUri =
     Constants.expoConfig?.hostUri ||
     Constants.manifest2?.extra?.expoGo?.developer?.tool ||
     Constants.manifest?.debuggerHost;
 
   if (hostUri) {
-    const dynamicIp = hostUri.split(':')[0]; // Extracts "192.168.0.121" from "192.168.0.121:8081"
-    if (
-      dynamicIp &&
-      dynamicIp !== 'localhost' &&
-      !dynamicIp.includes('127.0.0.1') &&
-      !dynamicIp.includes('exp.direct')
-    ) {
-      const dynamicUrl = `http://${dynamicIp}${BACKEND_PATH}`;
-      console.log('[API_URL] Automatically detected current PC IP:', dynamicUrl);
-      return dynamicUrl;
+    const ip = hostUri.split(':')[0];
+    if (ip && ip !== 'localhost' && !ip.includes('127.0.0.1') && !ip.includes('exp.direct')) {
+      const url = `http://${ip}${BACKEND_PATH}`;
+      console.log('[LOCAL API] Auto-detected PC IP:', url);
+      return url;
     }
   }
 
-  // Fallback IP if Expo manifest is missing
+  // Manual fallback: update this to match your PC's Wi-Fi IP if auto-detect fails
+  // Find your IP: open Command Prompt → type ipconfig → look for IPv4 Address
+  const FALLBACK_IP = '192.168.0.121';
+  console.log('[LOCAL API] Using fallback IP:', FALLBACK_IP);
   return `http://${FALLBACK_IP}${BACKEND_PATH}`;
 };
 
 export const API_URL = getApiUrl();
+export const RENDER_API_URL = null; // NOT USED — local XAMPP only
 
-console.log('[API_URL] Final API_URL =', API_URL);
+console.log('[LOCAL API] Final API_URL =', API_URL);
